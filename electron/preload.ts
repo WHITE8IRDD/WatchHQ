@@ -97,6 +97,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   clearImageCache: () => ipcRenderer.invoke('image:clearCache'),
   getImageCacheStats: () => ipcRenderer.invoke('image:stats'),
 
+  // === Debug ===
+  debugSampleUrls: () => ipcRenderer.invoke('debug:sampleUrls'),
+
   // === Categories ===
   getAllCategories: (playlistId: string) => ipcRenderer.invoke('categories:getAll', playlistId),
   setCategoriesHidden: (payload: { ids: string[]; hidden: boolean }) =>

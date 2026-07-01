@@ -249,6 +249,9 @@ declare global {
       clearImageCache: () => Promise<{ success: boolean }>;
       getImageCacheStats: () => Promise<{ size: number; calculatedSize: number; failed: number }>;
 
+      // Debug
+      debugSampleUrls: () => Promise<any[]>;
+
       // Categories
       getAllCategories: (playlistId: string) => Promise<{ id: string; group_title: string; is_hidden: number }[]>;
       setCategoriesHidden: (payload: { ids: string[]; hidden: boolean }) => Promise<{ success: boolean }>;

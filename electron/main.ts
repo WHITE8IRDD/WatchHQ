@@ -10,7 +10,7 @@ import { registerHistoryHandlers } from './ipc/history';
 import { registerFavoritesHandlers } from './ipc/favorites';
 import { registerCategoryHandlers } from './ipc/categories';
 import { registerImageCacheHandlers } from './services/imageCache';
-import { initDatabase, closeDatabase } from './services/database';
+import { initDatabase, closeDatabase, getDb } from './services/database';
 import { startStreamProxy, getProxyPort, stopStreamProxy } from './services/stream-proxy';
 
 process.on('uncaughtException', (err) => {
@@ -115,6 +115,13 @@ ipcMain.handle('stream:getProxyPort', () => {
   const port = getProxyPort();
   console.log('[IPC] stream:getProxyPort returning:', port);
   return port;
+});
+
+// Debug: sample channel URLs
+ipcMain.handle('debug:sampleUrls', () => {
+  try {
+    return getDb().prepare('SELECT tvg_name, url, url_fallback, group_title FROM channels LIMIT 5').all();
+  } catch { return []; }
 });
 
 // Register all IPC handlers

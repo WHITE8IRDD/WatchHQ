@@ -1,115 +1,87 @@
-// src/components/layout/Sidebar.tsx
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import {
-  House,
-  Television,
-  FilmStrip,
-  FilmSlate,
-  Heart,
-  ListDashes,
-  GearSix,
-} from '@phosphor-icons/react';
+import * as Tooltip from '@radix-ui/react-tooltip';
+import { Home, List, Heart, Clock, Film, Tv, Clapperboard, Search, Settings } from 'lucide-react';
 
-const sections = [
-  {
-    label: 'BROWSE',
-    items: [
-      { path: '/', icon: House, label: 'Dashboard' },
-      { path: '/live', icon: Television, label: 'Live TV' },
-      { path: '/movies', icon: FilmStrip, label: 'Movies' },
-      { path: '/series', icon: FilmSlate, label: 'Series' },
-    ],
-  },
-  {
-    label: 'LIBRARY',
-    items: [
-      { path: '/favorites', icon: Heart, label: 'Favorites' },
-      { path: '/playlists', icon: ListDashes, label: 'Playlists' },
-    ],
-  },
-  {
-    label: 'MANAGE',
-    items: [
-      { path: '/settings', icon: GearSix, label: 'Settings' },
-    ],
-  },
+interface SidebarItem {
+  path?: string;
+  icon: React.ElementType;
+  label: string;
+}
+
+const items: SidebarItem[] = [
+  { path: '/', icon: Home, label: 'Home' },
+  { path: '/playlists', icon: List, label: 'Playlists' },
+  { path: '/favorites', icon: Heart, label: 'Favorites' },
+  { path: '/', icon: Clock, label: 'Recently Viewed' },
+  { path: '/movies', icon: Film, label: 'Movies' },
+  { path: '/live', icon: Tv, label: 'Live TV' },
+  { path: '/series', icon: Clapperboard, label: 'Series' },
+  { icon: Search, label: 'Search' },
+  { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-const Sidebar = () => {
+const Sidebar: React.FC = () => {
   const location = useLocation();
 
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        window.dispatchEvent(new CustomEvent('open-command-palette'));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   return (
-    <aside className="fixed left-0 top-0 h-full w-[240px] bg-bg-elevated border-r border-border-subtle z-50 flex flex-col">
-      {/* Logo */}
-      <div className="h-[72px] flex items-center gap-3 px-5 border-b border-border-subtle">
+    <Tooltip.Provider delayDuration={300}>
+      <aside className="fixed left-0 top-0 h-full w-[60px] bg-bg-elevated border-r border-border-subtle z-50 flex flex-col items-center py-3 gap-3">
         <div className="w-9 h-9 rounded-lg bg-gold flex items-center justify-center flex-shrink-0">
           <span className="text-black font-bold text-base">W</span>
         </div>
-        <span className="font-display font-bold text-lg text-white tracking-tight">WatchHQ</span>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 flex flex-col gap-6 px-3 py-5 overflow-y-auto">
-        {sections.map((section) => (
-          <div key={section.label}>
-            <p className="px-3 mb-2 text-[10px] uppercase tracking-[0.12em] font-semibold text-text-tertiary">
-              {section.label}
-            </p>
-            <div className="flex flex-col gap-0.5">
-              {section.items.map((item) => {
-                const isActive = location.pathname === item.path;
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className="relative flex items-center gap-3 px-3 h-11 rounded-lg transition-colors duration-150 group"
-                    style={{
-                      background: isActive
-                        ? 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, transparent 100%)'
-                        : undefined,
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) {
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) {
-                        e.currentTarget.style.background = 'transparent';
-                      }
-                    }}
-                  >
-                    {isActive && (
-                      <motion.span
-                        layoutId="sidebar-active-pill"
-                        className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-white"
-                        transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                      />
-                    )}
-                    <Icon size={24} weight={isActive ? 'fill' : 'regular'} className="flex-shrink-0 z-10" />
-                    <span
-                      className={`text-sm z-10 ${
-                        isActive ? 'text-white font-medium' : 'text-text-secondary group-hover:text-white'
-                      }`}
+        <nav className="flex-1 flex flex-col items-center gap-1 w-full px-2">
+          {items.map((item) => {
+            const isActive = item.path ? location.pathname === item.path : false;
+            const Icon = item.icon;
+            const isSearch = item.label === 'Search';
+            const cls = `w-full aspect-square rounded-xl flex items-center justify-center transition-colors ${
+              isActive
+                ? 'bg-white/10 text-white'
+                : 'text-text-tertiary hover:text-white hover:bg-white/5'
+            }`;
+            return (
+              <Tooltip.Root key={item.label}>
+                <Tooltip.Trigger asChild>
+                  {isSearch ? (
+                    <button
+                      className={cls}
+                      onClick={() => window.dispatchEvent(new CustomEvent('open-command-palette'))}
                     >
-                      {item.label}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </nav>
-
-      {/* Bottom */}
-      <div className="px-5 py-4 border-t border-border-subtle">
-        <p className="text-[10px] text-text-tertiary font-mono">v1.0.0</p>
-      </div>
-    </aside>
+                      <Icon size={20} />
+                    </button>
+                  ) : (
+                    <Link to={item.path!} className={cls}>
+                      <Icon size={20} />
+                    </Link>
+                  )}
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content
+                    side="right"
+                    sideOffset={8}
+                    className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]"
+                  >
+                    {item.label}
+                    <Tooltip.Arrow className="fill-bg-overlay" />
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
+            );
+          })}
+        </nav>
+      </aside>
+    </Tooltip.Provider>
   );
 };
 

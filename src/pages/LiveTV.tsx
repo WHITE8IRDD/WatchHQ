@@ -1,28 +1,50 @@
-import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { motion, AnimatePresence } from 'framer-motion';
 import { usePlaylistStore } from '../store/playlistStore';
 import { usePreferencesStore } from '../store/preferencesStore';
 import {
   Television, Plus, ArrowClockwise, Heart, Play, Gear, MagnifyingGlass, CaretLeft, CaretRight, ClockCounterClockwise,
 } from '@phosphor-icons/react';
 import VideoPlayer from '../components/player/VideoPlayer';
-import AddPlaylistModal from '../components/playlist/AddPlaylistModal';
 import ChannelLogo from '../components/common/ChannelLogo';
-import CommandPalette from '../components/common/CommandPalette';
 import ManageCategoriesModal from '../components/livetv/ManageCategoriesModal';
 import AdvancedSearchBar from '../components/livetv/AdvancedSearchBar';
 import { toast } from '../components/common/Toast';
 import { useDebounce } from '../hooks/useDebounce';
 import { ChannelGridSkeleton } from '../components/common/Skeleton';
-import { staggerContainer, fadeInUp, springSnappy } from '../lib/motion';
 
 const CHANNELS_PER_PAGE = 2000;
 
-const log = (() => {
-  if (process.env.NODE_ENV === 'development') return console.log.bind(console);
-  return () => {};
-})();
+const log = import.meta.env.DEV ? console.log.bind(console) : () => {};
+
+const ChannelRow = React.memo(
+  ({ ch, isActive, currentChannelId, showLogos, showNumbers, epg, onSelect }: {
+    ch: any; isActive: boolean; currentChannelId: string | null;
+    showLogos: boolean; showNumbers: boolean;
+    epg: { now: any; next: any } | null;
+    onSelect: (ch: any) => void;
+  }) => (
+    <button onClick={() => onSelect(ch)}
+      className={`w-full flex items-center gap-2.5 px-3 text-left transition-colors ${
+        isActive ? 'bg-white/10 border-l-2 border-white' : 'hover:bg-white/5 border-l-2 border-transparent'
+      }`}
+      style={{ height: 40 }}
+    >
+      {showLogos && (
+        <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-bg-elevated">
+          <ChannelLogo name={ch.tvg_name} logo={ch.tvg_logo} size={32} />
+        </div>
+      )}
+      <div className="flex-1 min-w-0 flex items-center gap-1.5">
+        {showNumbers && ch.tvg_chno && <span className="text-[10px] text-text-tertiary font-mono">{ch.tvg_chno}</span>}
+        <p className="text-sm font-medium truncate">{ch.tvg_name}</p>
+        {ch.is_favorite === 1 && <Heart size={10} weight="fill" className="text-state-error flex-shrink-0" />}
+      </div>
+      {epg?.now && <p className="text-[11px] text-text-tertiary truncate hidden xl:block max-w-[120px]">{epg.now.title}</p>}
+    </button>
+  ),
+  (prev, next) => prev.ch.id === next.ch.id && prev.isActive === next.isActive && prev.currentChannelId === next.currentChannelId,
+);
 
 const LiveTV: React.FC = () => {
   const {
@@ -33,10 +55,8 @@ const LiveTV: React.FC = () => {
   } = usePlaylistStore();
   const prefs = usePreferencesStore((s) => s.prefs);
 
-  const [showAddModal, setShowAddModal] = useState(false);
   const [activePlaylistId, setActivePlaylistId] = useState<string | null>(null);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [showCmdPalette, setShowCmdPalette] = useState(false);
   const [showManageCats, setShowManageCats] = useState(false);
   const [epgData, setEpgData] = useState<Record<string, { now: any; next: any }>>({});
 
@@ -60,7 +80,7 @@ const LiveTV: React.FC = () => {
       if (!visible || visible.length === 0) {
         const groups = await window.electronAPI.getGroups(activePlaylistId);
         visible = groups.map((g: any) => ({ id: g.group_title, group_title: g.group_title }));
-        console.log('[LiveTV] Fallback to groups:', visible.length);
+        log('[LiveTV] Fallback to groups:', visible.length);
       }
       const chs = await window.electronAPI.getChannels(activePlaylistId);
       const counts: Record<string, number> = { All: chs.length };
@@ -125,15 +145,25 @@ const LiveTV: React.FC = () => {
 
   const noChannels = channels.length === 0 && !isLoading;
 
-  // Ctrl+K handler
+  // Listen for advanced search filters from modal
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return;
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); setShowCmdPalette(v => !v); }
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!activePlaylistId) return;
+      (async () => {
+        try {
+          let results = await window.electronAPI.searchChannels({
+            playlistId: activePlaylistId,
+            query: '',
+            group: detail.category !== 'All' ? detail.category : undefined,
+          });
+          setAdvancedSearchResults(results || []);
+        } catch { setAdvancedSearchResults([]); }
+      })();
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
+    window.addEventListener('advanced-search-apply', handler);
+    return () => window.removeEventListener('advanced-search-apply', handler);
+  }, [activePlaylistId]);
 
   // Virtualized category list
   const parentRef = useRef<HTMLDivElement>(null);
@@ -149,7 +179,7 @@ const LiveTV: React.FC = () => {
   const channelVirtualizer = useVirtualizer({
     count: categoryChannels.length,
     getScrollElement: () => channelParentRef.current,
-    estimateSize: () => 56,
+    estimateSize: () => 40,
     overscan: 15,
   });
 
@@ -157,7 +187,6 @@ const LiveTV: React.FC = () => {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <CommandPalette open={showCmdPalette} onClose={() => setShowCmdPalette(false)} />
       <ManageCategoriesModal open={showManageCats} onClose={() => setShowManageCats(false)} />
 
       {/* ── LEFT: Categories (240px) ── */}
@@ -231,26 +260,17 @@ const LiveTV: React.FC = () => {
               {channelVirtualizer.getVirtualItems().map((virtualRow) => {
                 const ch = categoryChannels[virtualRow.index];
                 if (!ch) return null;
-                const epg = epgData[ch.tvg_id] || null;
                 return (
                   <div key={ch.id} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: virtualRow.size, transform: `translateY(${virtualRow.start}px)` }}>
-                    <button onClick={() => setCurrentChannel(ch)}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors ${
-                        currentChannel?.id === ch.id ? 'bg-white/10 border-l-2 border-white' : 'hover:bg-white/5 border-l-2 border-transparent'
-                      }`}
-                    >
-                      <div className="w-9 h-9 rounded-lg overflow-hidden flex-shrink-0 bg-bg-elevated">
-                        {showLogos ? <ChannelLogo name={ch.tvg_name} logo={ch.tvg_logo} size={36} /> : null}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          {showNumbers && ch.tvg_chno && <span className="text-[10px] text-text-tertiary font-mono">{ch.tvg_chno}</span>}
-                          <p className="text-sm font-medium truncate">{ch.tvg_name}</p>
-                          {ch.is_favorite === 1 && <Heart size={10} weight="fill" className="text-state-error flex-shrink-0" />}
-                        </div>
-                        {epg?.now && <p className="text-[11px] text-text-tertiary truncate">{epg.now.title}</p>}
-                      </div>
-                    </button>
+                    <ChannelRow
+                      ch={ch}
+                      isActive={currentChannel?.id === ch.id}
+                      currentChannelId={currentChannel?.id || null}
+                      showLogos={showLogos}
+                      showNumbers={showNumbers}
+                      epg={epgData[ch.tvg_id] || null}
+                      onSelect={setCurrentChannel}
+                    />
                   </div>
                 );
               })}
@@ -274,7 +294,7 @@ const LiveTV: React.FC = () => {
             className="w-8 h-8 rounded-lg text-text-tertiary hover:text-white hover:bg-white/5 flex items-center justify-center disabled:opacity-40">
             <ArrowClockwise size={14} className={isLoading ? 'animate-spin' : ''} />
           </button>
-          <button onClick={() => setShowAddModal(true)}
+          <button onClick={() => window.dispatchEvent(new CustomEvent('open-add-playlist'))}
             className="w-8 h-8 rounded-lg text-text-tertiary hover:text-white hover:bg-white/5 flex items-center justify-center">
             <Plus size={14} />
           </button>
@@ -304,18 +324,6 @@ const LiveTV: React.FC = () => {
           </div>
         )}
       </div>
-
-      {showAddModal && (
-        <AddPlaylistModal onClose={async () => {
-          setShowAddModal(false);
-          await loadPlaylists();
-          const lists = await window.electronAPI.getPlaylists();
-          if (lists.length > 0 && !activePlaylistId) {
-            setActivePlaylistId(lists[0].id);
-            await loadChannels(lists[0].id);
-          }
-        }} />
-      )}
     </div>
   );
 };

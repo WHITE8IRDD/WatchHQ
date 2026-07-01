@@ -13,6 +13,8 @@ import {
   ExternalLink, Heart, Info, Loader, Tv,
 } from 'lucide-react';
 
+const log = import.meta.env.DEV ? console.log.bind(console) : () => {};
+
 function calcBuffered(video: HTMLVideoElement): number {
   try {
     const buf = video.buffered;
@@ -72,8 +74,12 @@ const VideoPlayer: React.FC = () => {
     const video = videoRef.current;
     if (!video) return;
 
-    const log = console.log.bind(console);
     log('[PLAY] Loading:', urlToTry.substring(0, 100), 'retry:', isRetry);
+    log('[PLAY-DIAG] ═══════════════════');
+    log('[PLAY-DIAG] Channel:', currentChannel?.tvg_name);
+    log('[PLAY-DIAG] Primary URL:', currentChannel?.url);
+    log('[PLAY-DIAG] Fallback URL:', currentChannel?.url_fallback);
+    try { log('[PLAY-DIAG] Proxy port:', await window.electronAPI.getStreamProxyPort()); } catch {}
 
     setError(null);
     setIsBuffering(true);
@@ -186,7 +192,6 @@ const VideoPlayer: React.FC = () => {
 
   // ── Playback effect ──
   useEffect(() => {
-    const log = console.log.bind(console);
     const video = videoRef.current;
     if (!video || !currentChannel) return;
 
