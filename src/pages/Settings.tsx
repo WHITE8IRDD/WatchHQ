@@ -1,10 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Playlist, Broadcast, Monitor, Sun, Database, Info, TrashSimple,
-  DownloadSimple, UploadSimple, FolderOpen, ArrowClockwise, CheckCircle, XCircle,
-  Keyboard, Gear, PlayCircle,
-} from '@phosphor-icons/react';
+import { motion } from 'framer-motion';
+import { Settings2, Play, Calendar, Database, Trash2, Info, Sun, Moon, Monitor, Save } from 'lucide-react';
 import { usePreferencesStore } from '../store/preferencesStore';
 import { toast } from '../components/common/Toast';
 import ConfirmDialog from '../components/common/ConfirmDialog';
@@ -16,22 +12,22 @@ function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   ]);
 }
 
-type SettingsTab = 'general' | 'playback' | 'playlists' | 'epg' | 'data' | 'shortcuts' | 'about';
+type SettingsTab = 'general' | 'playback' | 'epg' | 'backup' | 'reset' | 'about';
 
-const TABS: { id: SettingsTab; label: string; icon: React.FC<any> }[] = [
-  { id: 'general', label: 'General', icon: Gear },
-  { id: 'playback', label: 'Playback', icon: PlayCircle },
-  { id: 'playlists', label: 'Playlists', icon: Playlist },
-  { id: 'epg', label: 'EPG', icon: Broadcast },
-  { id: 'data', label: 'Data', icon: Database },
-  { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
-  { id: 'about', label: 'About', icon: Info },
+const tabs = [
+  { id: 'general' as SettingsTab, label: 'General', icon: Settings2 },
+  { id: 'playback' as SettingsTab, label: 'Playback', icon: Play },
+  { id: 'epg' as SettingsTab, label: 'EPG', icon: Calendar },
+  { id: 'backup' as SettingsTab, label: 'Backup', icon: Database },
+  { id: 'reset' as SettingsTab, label: 'Reset', icon: Trash2 },
+  { id: 'about' as SettingsTab, label: 'About', icon: Info },
 ];
 
 const Settings: React.FC = () => {
   const { prefs, loadPreferences, updatePreference } = usePreferencesStore();
   const [pendingChanges, setPendingChanges] = useState<Record<string, any>>({});
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+  const [saving, setSaving] = useState(false);
 
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
@@ -45,10 +41,7 @@ const Settings: React.FC = () => {
   const [playerLoading, setPlayerLoading] = useState(true);
 
   const [syncing, setSyncing] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
-  const [locatingMpv, setLocatingMpv] = useState(false);
-  const [locatingVlc, setLocatingVlc] = useState(false);
 
   useEffect(() => { loadPreferences(); }, [loadPreferences]);
 
@@ -75,6 +68,7 @@ const Settings: React.FC = () => {
   const hasChanges = Object.keys(pendingChanges).length > 0;
 
   const savePreferences = async () => {
+    setSaving(true);
     try {
       for (const [key, value] of Object.entries(pendingChanges)) {
         await updatePreference(key, value);
@@ -84,11 +78,7 @@ const Settings: React.FC = () => {
     } catch (err: any) {
       toast.error('Failed to save: ' + err.message);
     }
-  };
-
-  const discardChanges = () => {
-    setPendingChanges({});
-    toast.info('Changes discarded');
+    setSaving(false);
   };
 
   const handleEpgSync = async () => {
@@ -115,30 +105,14 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleDeletePlaylist = async (id: string) => {
-    try {
-      await window.electronAPI.deletePlaylist(id);
-      toast.success('Playlist deleted');
-      setConfirmDelete(null);
-      setPlaylists(await window.electronAPI.getPlaylists());
-    } catch (error: any) {
-      toast.error(error.message);
-    }
+  const handleExportBackup = async () => {
+    const result = await window.electronAPI.exportBackup();
+    if (result.success) toast.success('Backup exported successfully');
   };
 
-  const handleRefreshPlaylist = async (id: string) => {
-    toast.info('Refreshing playlist...');
-    try {
-      const result = await window.electronAPI.refreshPlaylist(id);
-      if (result.success) {
-        toast.success(`Refreshed — ${result.count} channels`);
-        setPlaylists(await window.electronAPI.getPlaylists());
-      } else {
-        toast.error(result.error || 'Refresh failed');
-      }
-    } catch (error: any) {
-      toast.error(error.message);
-    }
+  const handleImportBackup = async () => {
+    const result = await window.electronAPI.importBackup();
+    if (result.success) toast.info('Backup imported. Please restart the app.');
   };
 
   const handleClearAllData = async () => {
@@ -152,150 +126,93 @@ const Settings: React.FC = () => {
     }
   };
 
-  const handleExportBackup = async () => {
-    const result = await window.electronAPI.exportBackup();
-    if (result.success) toast.success('Backup exported successfully');
-  };
-
-  const handleImportBackup = async () => {
-    const result = await window.electronAPI.importBackup();
-    if (result.success) toast.info('Backup imported. Please restart the app.');
-  };
-
-  const locateBinary = async (player: 'mpv' | 'vlc') => {
-    const setter = player === 'mpv' ? setLocatingMpv : setLocatingVlc;
-    setter(true);
-    try {
-      const result = await window.electronAPI.selectFile();
-      if (result) {
-        await updatePreference(player === 'mpv' ? 'mpv_path' : 'vlc_path', result.path);
-        toast.success(`${player.toUpperCase()} binary set to ${result.path}`);
-        const status = await window.electronAPI.checkPlayerAvailability(player);
-        setPlayerStatus((prev) => ({ ...prev, [player]: status }));
-      }
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setter(false);
-    }
-  };
-
-  const playlistsToDelete = confirmDelete
-    ? playlists.find((p) => p.id === confirmDelete)
-    : null;
-
   const renderTabContent = () => {
     switch (activeTab) {
       case 'general':
         return (
-          <div className="space-y-5">
-            <h3 className="font-display font-semibold text-base">General</h3>
-            <div>
-              <label className="text-xs text-text-tertiary mb-1.5 block">Grid Size</label>
-              <select value={prefValue('grid_size') || 'medium'} onChange={(e) => stagePreference('grid_size', e.target.value)}
-                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20">
-                <option value="small">Small (140px)</option>
-                <option value="medium">Medium (180px)</option>
-                <option value="large">Large (220px)</option>
+          <SettingSection icon={Settings2} title="General" description="Application preferences">
+            <SettingRow label="Language" description="Interface language">
+              <select value={prefValue('language') || 'en'} onChange={(e) => stagePreference('language', e.target.value)}
+                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-40 focus:outline-none focus:border-white/20">
+                <option value="en">English</option>
+                <option value="ar">العربية</option>
+                <option value="fr">Français</option>
+                <option value="de">Deutsch</option>
+                <option value="es">Español</option>
               </select>
-            </div>
-            <div>
-              <label className="text-xs text-text-tertiary mb-1.5 block">Sort Channels By</label>
-              <select value={prefValue('sort_channels_by') || 'name'} onChange={(e) => stagePreference('sort_channels_by', e.target.value)}
-                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20">
-                <option value="name">Name</option>
-                <option value="number">Channel Number</option>
-                <option value="group">Category</option>
-                <option value="recent">Recently Watched</option>
+            </SettingRow>
+            <SettingRow label="Visual Theme" description="Choose your preferred appearance">
+              <div className="flex gap-1 p-1 bg-white/5 rounded-xl">
+                {[
+                  { value: 'light', icon: Sun },
+                  { value: 'dark', icon: Moon },
+                  { value: 'system', icon: Monitor },
+                ].map(({ value, icon: Icon }) => (
+                  <button key={value} onClick={() => stagePreference('theme', value)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                      (prefValue('theme') || 'dark') === value ? 'bg-accent/10 text-accent' : 'text-text-secondary hover:text-white'
+                    }`}>
+                    <Icon size={14} />
+                    {value.charAt(0).toUpperCase() + value.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </SettingRow>
+            <SettingRow label="Show Dashboard" description="Show dashboard on home page">
+              <Toggle value={prefValue('show_dashboard') === 1} onChange={(v) => stagePreference('show_dashboard', v ? 1 : 0)} />
+            </SettingRow>
+            <SettingRow label="Startup View" description="What to show on startup">
+              <select value={prefValue('startup_view') || 'first'} onChange={(e) => stagePreference('startup_view', e.target.value)}
+                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-44 focus:outline-none focus:border-white/20">
+                <option value="first">First available view</option>
+                <option value="last">Restore last view</option>
               </select>
-            </div>
-            <ToggleSetting label="Show Channel Numbers" checked={prefValue('show_channel_numbers') === 1} onChange={(v) => stagePreference('show_channel_numbers', v ? 1 : 0)} />
-            <ToggleSetting label="Show Channel Logos" checked={prefValue('show_channel_logos') === 1} onChange={(v) => stagePreference('show_channel_logos', v ? 1 : 0)} />
-            <ToggleSetting label="Compact Mode" description="Smaller interface elements" checked={prefValue('compact_mode') === 1} onChange={(v) => stagePreference('compact_mode', v ? 1 : 0)} />
-            <ToggleSetting label="Start Minimized" description="Launch app to system tray" checked={prefValue('start_minimized') === 1} onChange={(v) => stagePreference('start_minimized', v ? 1 : 0)} />
-            <ToggleSetting label="Debug Logging" description="Enable verbose console output" checked={prefValue('debug_logging') === 1} onChange={(v) => stagePreference('debug_logging', v ? 1 : 0)} />
-          </div>
+            </SettingRow>
+            <SettingRow label="Show Subtitles" description="Display subtitles when available">
+              <Toggle value={prefValue('show_subtitles') === 1} onChange={(v) => stagePreference('show_subtitles', v ? 1 : 0)} />
+            </SettingRow>
+          </SettingSection>
         );
 
       case 'playback':
         return (
-          <div className="space-y-5">
-            <h3 className="font-display font-semibold text-base">Playback</h3>
-            {playerLoading ? (
-              <p className="text-text-tertiary text-sm py-4">Loading...</p>
-            ) : (
-              <>
-                <div>
-                  <label className="text-xs text-text-tertiary mb-1.5 block">Default Player</label>
-                  <select value={prefValue('player_type') || 'internal'} onChange={(e) => stagePreference('player_type', e.target.value)}
-                    className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20">
-                    <option value="internal">Internal (HLS.js)</option>
-                    <option value="mpv">MPV</option>
-                    <option value="vlc">VLC</option>
-                  </select>
-                </div>
-                <ToggleSetting label="Hardware Acceleration" description="Use GPU for video decoding" checked={prefValue('hardware_acceleration') === 1} onChange={(v) => stagePreference('hardware_acceleration', v ? 1 : 0)} />
-                <ToggleSetting label="Remember Playback Position" description="Resume from where you left off" checked={prefValue('remember_position') === 1} onChange={(v) => stagePreference('remember_position', v ? 1 : 0)} />
-                <ToggleSetting label="Auto-Play Next Episode" description="Automatically play next episode in series" checked={prefValue('auto_play_next') === 1} onChange={(v) => stagePreference('auto_play_next', v ? 1 : 0)} />
-                <BinaryStatus name="MPV" available={playerStatus.mpv?.available} path={prefValue('mpv_path')} onLocate={() => locateBinary('mpv')} loading={locatingMpv} />
-                <BinaryStatus name="VLC" available={playerStatus.vlc?.available} path={prefValue('vlc_path')} onLocate={() => locateBinary('vlc')} loading={locatingVlc} />
-              </>
-            )}
-          </div>
-        );
-
-      case 'playlists':
-        return (
-          <div className="space-y-5">
-            <h3 className="font-display font-semibold text-base">Playlists</h3>
-            {playlistsLoading ? (
-              <p className="text-text-tertiary text-sm py-4">Loading...</p>
-            ) : playlists.length === 0 ? (
-              <p className="text-text-secondary text-sm">No playlists added yet.</p>
-            ) : (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {playlists.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between bg-bg-base border border-border-subtle rounded-xl px-4 py-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{p.name}</p>
-                      <div className="flex items-center gap-3 mt-0.5">
-                        <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-text-secondary rounded font-medium uppercase">{p.type}</span>
-                        <span className="text-xs text-text-tertiary">{p.channel_count || 0} channels</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 ml-3">
-                      <button onClick={() => handleRefreshPlaylist(p.id)}
-                        className="p-1.5 text-text-tertiary hover:text-white rounded-lg hover:bg-white/5 transition-colors">
-                        <ArrowClockwise size={14} />
-                      </button>
-                      <button onClick={() => setConfirmDelete(p.id)}
-                        className="p-1.5 text-text-tertiary hover:text-state-error rounded-lg hover:bg-white/5 transition-colors">
-                        <TrashSimple size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <SettingSection icon={Play} title="Playback" description="Configure video playback settings">
+            <SettingRow label="Default Player" description="Which player to use for video playback">
+              <select value={prefValue('player_type') || 'internal'} onChange={(e) => stagePreference('player_type', e.target.value)}
+                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-40 focus:outline-none focus:border-white/20">
+                <option value="internal">Internal</option>
+                <option value="mpv">MPV</option>
+                <option value="vlc">VLC</option>
+              </select>
+            </SettingRow>
+            <SettingRow label="Hardware Acceleration" description="Use GPU for video decoding">
+              <Toggle value={prefValue('hardware_acceleration') === 1} onChange={(v) => stagePreference('hardware_acceleration', v ? 1 : 0)} />
+            </SettingRow>
+            <SettingRow label="Remember Playback Position" description="Resume from where you left off">
+              <Toggle value={prefValue('remember_position') === 1} onChange={(v) => stagePreference('remember_position', v ? 1 : 0)} />
+            </SettingRow>
+            <SettingRow label="Auto-play Next Episode" description="Automatically play next episode in series">
+              <Toggle value={prefValue('auto_play_next') === 1} onChange={(v) => stagePreference('auto_play_next', v ? 1 : 0)} />
+            </SettingRow>
+          </SettingSection>
         );
 
       case 'epg':
         return (
-          <div className="space-y-5">
-            <h3 className="font-display font-semibold text-base">EPG (XMLTV)</h3>
-            <p className="text-xs text-text-tertiary">Electronic Program Guide data</p>
-            <div className="flex gap-2">
-              <input value={epgUrl} onChange={(e) => setEpgUrl(e.target.value)}
-                placeholder="https://example.com/xmltv.xml.gz"
-                className="flex-1 bg-bg-base border border-border-subtle rounded-xl px-4 py-2.5 text-sm text-white placeholder-text-tertiary focus:outline-none focus:border-white/20 transition-colors" />
-              <button onClick={handleEpgSync} disabled={syncing || !epgUrl}
-                className="px-4 py-2.5 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-40 flex items-center gap-2">
-                {syncing ? <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : 'Import'}
-              </button>
-            </div>
+          <SettingSection icon={Calendar} title="EPG" description="Electronic Program Guide">
+            <SettingRow label="EPG URL" description="URL to XMLTV data">
+              <div className="flex gap-2">
+                <input value={epgUrl} onChange={(e) => setEpgUrl(e.target.value)}
+                  placeholder="https://example.com/xmltv.xml.gz"
+                  className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-64 placeholder-text-tertiary focus:outline-none focus:border-white/20" />
+                <button onClick={handleEpgSync} disabled={syncing || !epgUrl}
+                  className="px-4 py-2 bg-white text-black rounded-xl text-sm font-medium hover:bg-white/90 transition-all disabled:opacity-40 flex items-center gap-2">
+                  {syncing ? <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : 'Import'}
+                </button>
+              </div>
+            </SettingRow>
             {epgLoading ? (
-              <p className="text-text-tertiary text-xs py-2">Loading EPG info...</p>
+              <p className="text-xs text-text-tertiary">Loading EPG info...</p>
             ) : (
               <>
                 {epgStats && (
@@ -307,11 +224,11 @@ const Settings: React.FC = () => {
                 {epgSources.length > 0 && (
                   <div className="space-y-1">
                     {epgSources.map((s: any) => (
-                      <div key={s.id} className="flex items-center justify-between bg-bg-base rounded-lg px-3 py-2 text-xs">
-                        <span className="truncate text-text-tertiary">{s.url}</span>
+                      <div key={s.id} className="flex items-center justify-between py-1.5">
+                        <span className="text-xs text-text-tertiary truncate">{s.url}</span>
                         <button onClick={async () => { await window.electronAPI.removeEpgSource(s.id); setEpgSources(await window.electronAPI.getEpgSources().catch(() => [])); }}
-                          className="p-1 text-text-tertiary hover:text-state-error transition-colors ml-2">
-                          <TrashSimple size={12} />
+                          className="p-1 text-text-tertiary hover:text-state-error transition-colors">
+                          <Trash2 size={12} />
                         </button>
                       </div>
                     ))}
@@ -319,57 +236,45 @@ const Settings: React.FC = () => {
                 )}
               </>
             )}
-          </div>
+          </SettingSection>
         );
 
-      case 'data':
+      case 'backup':
         return (
-          <div className="space-y-5">
-            <h3 className="font-display font-semibold text-base">Data Management</h3>
-            <div className="space-y-2">
-              <ActionButton icon={FolderOpen} label="Open Data Folder" onClick={() => window.electronAPI.openDataFolder()} />
-              <ActionButton icon={DownloadSimple} label="Export Database Backup" onClick={handleExportBackup} />
-              <ActionButton icon={UploadSimple} label="Import Database Backup" onClick={handleImportBackup} />
-              <ActionButton icon={TrashSimple} label="Clear Watch History" onClick={async () => { await window.electronAPI.clearHistory(); toast.success('Watch history cleared'); await loadPreferences(); }} />
-              <button onClick={() => setConfirmClearAll(true)}
-                className="flex items-center gap-3 w-full px-4 py-3 bg-state-error/5 border border-state-error/20 rounded-xl text-sm text-state-error hover:bg-state-error/10 transition-colors">
-                <TrashSimple size={16} />
-                <span>Clear All Data</span>
-              </button>
-            </div>
-          </div>
+          <SettingSection icon={Database} title="Backup" description="Export or import your data">
+            <SettingRow label="Open Data Folder" description="Browse application data files">
+              <button onClick={() => window.electronAPI.openDataFolder()}
+                className="px-4 py-2 bg-white/10 rounded-xl text-sm hover:bg-white/20 transition-colors">Open</button>
+            </SettingRow>
+            <SettingRow label="Export Database Backup" description="Save a backup of your data">
+              <button onClick={handleExportBackup}
+                className="px-4 py-2 bg-white/10 rounded-xl text-sm hover:bg-white/20 transition-colors">Export</button>
+            </SettingRow>
+            <SettingRow label="Import Database Backup" description="Restore from a backup file">
+              <button onClick={handleImportBackup}
+                className="px-4 py-2 bg-white/10 rounded-xl text-sm hover:bg-white/20 transition-colors">Import</button>
+            </SettingRow>
+            <SettingRow label="Clear Watch History" description="Remove all watch history records">
+              <button onClick={async () => { await window.electronAPI.clearHistory(); toast.success('Watch history cleared'); }}
+                className="px-4 py-2 bg-state-error/10 text-state-error rounded-xl text-sm hover:bg-state-error/20 transition-colors">Clear</button>
+            </SettingRow>
+          </SettingSection>
         );
 
-      case 'shortcuts':
+      case 'reset':
         return (
-          <div className="space-y-5">
-            <h3 className="font-display font-semibold text-base">Keyboard Shortcuts</h3>
-            <div className="space-y-2 text-sm">
-              {[
-                ['Toggle Sidebar', 'Ctrl + B'],
-                ['Search', 'Ctrl + K / Ctrl + F'],
-                ['Fullscreen', 'F'],
-                ['Reload Channels', 'Ctrl + R'],
-                ['Play / Pause', 'Space / K'],
-                ['Mute', 'M'],
-                ['Volume Up / Down', '↑ / ↓'],
-                ['Previous / Next Channel', '← / → (live)'],
-                ['Picture-in-Picture', 'P'],
-                ['Exit Fullscreen', 'Esc'],
-              ].map(([action, key]) => (
-                <div key={action} className="flex justify-between py-1.5 border-b border-border-subtle/50">
-                  <span className="text-text-secondary">{action}</span>
-                  <kbd className="px-2 py-0.5 bg-bg-base rounded text-xs text-text-tertiary font-mono">{key}</kbd>
-                </div>
-              ))}
-            </div>
-          </div>
+          <SettingSection icon={Trash2} title="Reset" description="Dangerous actions — proceed with caution">
+            <button onClick={() => setConfirmClearAll(true)}
+              className="flex items-center gap-2 w-full px-4 py-3 bg-state-error/10 border border-state-error/20 rounded-xl text-sm text-state-error hover:bg-state-error/20 transition-colors justify-center">
+              <Trash2 size={16} />
+              Clear All Data
+            </button>
+          </SettingSection>
         );
 
       case 'about':
         return (
-          <div className="space-y-5">
-            <h3 className="font-display font-semibold text-base">About</h3>
+          <div className="border border-border-subtle rounded-2xl p-6">
             <div className="flex flex-col items-center py-6">
               <div className="w-16 h-16 rounded-2xl bg-gold flex items-center justify-center mb-4">
                 <span className="text-black font-bold text-3xl">W</span>
@@ -389,43 +294,37 @@ const Settings: React.FC = () => {
 
   return (
     <div className="flex h-full">
-      {/* Left tab rail */}
-      <div className="w-[200px] flex-shrink-0 border-r border-border-subtle bg-bg-base/50 flex flex-col py-6 px-3 overflow-y-auto">
-        {TABS.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
-                activeTab === tab.id
-                  ? 'bg-white/10 text-white font-medium'
-                  : 'text-text-secondary hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Icon size={18} />
-              {tab.label}
-            </button>
-          );
-        })}
+      <div className="w-[280px] border-r border-border-subtle p-6 flex-shrink-0">
+        <h1 className="text-2xl font-display font-bold mb-2">Settings</h1>
+        <p className="text-sm text-text-secondary mb-6">Change the configuration of the application</p>
+        <nav className="space-y-1">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-left transition-colors ${
+                  activeTab === tab.id ? 'bg-accent/10 text-accent font-medium' : 'text-text-secondary hover:bg-white/5'
+                }`}>
+                <Icon size={18} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Right content pane */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-8 pb-24">
           {renderTabContent()}
         </div>
       </div>
 
-      {confirmDelete && playlistsToDelete && (
-        <ConfirmDialog
-          title="Delete Playlist"
-          message={`This will permanently delete "${playlistsToDelete.name}" and all its channels.`}
-          confirmLabel="Delete"
-          variant="danger"
-          onConfirm={() => handleDeletePlaylist(confirmDelete)}
-          onCancel={() => setConfirmDelete(null)}
-        />
+      {hasChanges && (
+        <motion.button initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+          onClick={savePreferences} disabled={saving}
+          className="fixed bottom-8 right-8 z-50 flex items-center gap-2 px-5 py-3 bg-white text-black rounded-xl font-medium shadow-xl hover:bg-white/90">
+          <Save size={16} /> {saving ? 'Saving\u2026' : 'Save changes'}
+        </motion.button>
       )}
 
       {confirmClearAll && (
@@ -438,66 +337,37 @@ const Settings: React.FC = () => {
           onCancel={() => setConfirmClearAll(false)}
         />
       )}
-
-      <AnimatePresence>
-        {hasChanges && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-            className="fixed bottom-0 left-[72px] right-0 z-50 bg-bg-elevated/95 backdrop-blur-xl border-t border-border-subtle px-8 py-4 flex items-center justify-between"
-          >
-            <p className="text-sm text-text-secondary">
-              <span className="text-white font-medium">{Object.keys(pendingChanges).length}</span> pending change(s)
-            </p>
-            <div className="flex items-center gap-3">
-              <button onClick={discardChanges}
-                className="px-5 py-2.5 text-sm border border-border-subtle rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">Discard</button>
-              <button onClick={savePreferences}
-                className="px-5 py-2.5 text-sm bg-white text-black rounded-xl font-medium hover:bg-white/90 transition-colors">Save Changes</button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };
 
-const ToggleSetting: React.FC<{ label: string; description?: string; checked: boolean; onChange: (value: boolean) => void }> = ({ label, description, checked, onChange }) => (
-  <div className="flex items-center justify-between py-1">
-    {(label || description) && (
+const SettingSection: React.FC<{ icon: any; title: string; description: string; children: React.ReactNode }> = ({ icon: Icon, title, description, children }) => (
+  <div className="border border-border-subtle rounded-2xl p-6">
+    <div className="flex items-center gap-3 mb-6">
+      <Icon size={20} className="text-accent" />
       <div>
-        {label && <p className="text-sm text-text-primary">{label}</p>}
-        {description && <p className="text-xs text-text-tertiary mt-0.5">{description}</p>}
+        <h2 className="font-display font-semibold">{title}</h2>
+        <p className="text-xs text-text-tertiary">{description}</p>
       </div>
-    )}
-    <button onClick={() => onChange(!checked)}
-      className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${label || description ? 'ml-3' : ''} ${checked ? 'bg-white' : 'bg-white/10'}`}>
-      <span className={`absolute top-1 w-4 h-4 rounded-full bg-black transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
-    </button>
-  </div>
-);
-
-const ActionButton: React.FC<{ icon: React.FC<any>; label: string; onClick: () => void }> = ({ icon: Icon, label, onClick }) => (
-  <button onClick={onClick}
-    className="flex items-center gap-3 w-full px-4 py-3 bg-bg-base border border-border-subtle rounded-xl text-sm hover:bg-white/[0.02] transition-colors">
-    <Icon size={16} className="text-text-tertiary" />
-    <span>{label}</span>
-  </button>
-);
-
-const BinaryStatus: React.FC<{ name: string; available: boolean; path: string; onLocate: () => void; loading: boolean }> = ({ name, available, path, onLocate, loading }) => (
-  <div className="flex items-center justify-between bg-bg-base rounded-xl px-4 py-3">
-    <div className="flex items-center gap-2">
-      {available ? <CheckCircle size={14} className="text-state-success" weight="fill" /> : <XCircle size={14} className="text-state-error" weight="fill" />}
-      <span className="text-sm text-text-secondary">{name}: {available ? `Detected at ${path || 'default path'}` : 'Not found'}</span>
     </div>
-    <button onClick={onLocate} disabled={loading}
-      className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-white/5 transition-colors disabled:opacity-40">
-      {loading ? '...' : 'Locate'}
-    </button>
+    <div className="space-y-6">{children}</div>
   </div>
+);
+
+const SettingRow: React.FC<{ label: string; description?: string; children: React.ReactNode }> = ({ label, description, children }) => (
+  <div className="flex items-center justify-between gap-8 py-2 border-b border-border-subtle last:border-0">
+    <div className="flex-1 min-w-0">
+      <p className="text-sm font-medium">{label}</p>
+      {description && <p className="text-xs text-text-tertiary mt-0.5">{description}</p>}
+    </div>
+    <div className="flex-shrink-0">{children}</div>
+  </div>
+);
+
+const Toggle: React.FC<{ value: boolean; onChange: (v: boolean) => void }> = ({ value, onChange }) => (
+  <button onClick={() => onChange(!value)} className={`w-10 h-6 rounded-full relative transition-colors ${value ? 'bg-accent' : 'bg-white/10'}`}>
+    <span className={`absolute top-1 w-4 h-4 rounded-full transition-transform ${value ? 'bg-black translate-x-5' : 'bg-white translate-x-1'}`} />
+  </button>
 );
 
 export default Settings;

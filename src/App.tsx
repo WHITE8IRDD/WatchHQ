@@ -9,6 +9,7 @@ import Series from './pages/Series';
 import Favorites from './pages/Favorites';
 import History from './pages/History';
 import Playlists from './pages/Playlists';
+import Downloads from './pages/Downloads';
 import Settings from './pages/Settings';
 import CommandPalette from './components/common/CommandPalette';
 import AddPlaylistModal from './components/playlist/AddPlaylistModal';
@@ -51,6 +52,7 @@ const App: React.FC = () => {
                 <Route path="/favorites" element={<Favorites />} />
                 <Route path="/history" element={<History />} />
                 <Route path="/playlists" element={<Playlists />} />
+                <Route path="/downloads" element={<Downloads />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

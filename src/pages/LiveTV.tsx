@@ -4,7 +4,7 @@ import { usePlaylistStore } from '../store/playlistStore';
 import { usePreferencesStore } from '../store/preferencesStore';
 import {
   Television, Plus, ArrowClockwise, Heart, Play, Gear, MagnifyingGlass,
-  CaretLeft, CaretRight, ClockCounterClockwise, Star, Funnel,
+  CaretLeft, CaretRight, ClockCounterClockwise, Star, Funnel, Info,
 } from '@phosphor-icons/react';
 import VideoPlayer from '../components/player/VideoPlayer';
 import ChannelLogo from '../components/common/ChannelLogo';
@@ -38,16 +38,42 @@ function getCategoryIcon(name: string): string {
   return '📡';
 }
 
+function formatEpgTime(timestamp: number | string): string {
+  if (!timestamp) return '';
+  const d = typeof timestamp === 'number' ? new Date(timestamp * 1000) : new Date(timestamp);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function computeEpgProgress(epgNow: any): number {
+  if (!epgNow?.start_time || !epgNow?.end_time) return 0;
+  const start = typeof epgNow.start_time === 'number' ? epgNow.start_time * 1000 : new Date(epgNow.start_time).getTime();
+  const end = typeof epgNow.end_time === 'number' ? epgNow.end_time * 1000 : new Date(epgNow.end_time).getTime();
+  const now = Date.now();
+  if (now <= start) return 0;
+  if (now >= end) return 100;
+  return ((now - start) / (end - start)) * 100;
+}
+
+function formatEpgDate(date: Date): string {
+  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+function isEpgCurrent(prog: any): boolean {
+  const now = Date.now();
+  const start = typeof prog.start_time === 'number' ? prog.start_time * 1000 : new Date(prog.start_time).getTime();
+  const end = typeof prog.end_time === 'number' ? prog.end_time * 1000 : new Date(prog.end_time).getTime();
+  return now >= start && now <= end;
+}
+
 const ChannelRow = React.memo(({
-  ch, isActive, showLogos, showNumbers, epg, onSelect, onToggleFavorite,
+  ch, isActive, showLogos, showNumbers, epg, onSelect, onToggleFavorite, onChannelInfo,
 }: {
   ch: any; isActive: boolean; showLogos: boolean; showNumbers: boolean;
-  epg: { now: any; next: any } | null;
+  epg: { now: any; next: any; progress?: number } | null;
   onSelect: (ch: any) => void;
   onToggleFavorite: (ch: any) => void;
+  onChannelInfo: (ch: any) => void;
 }) => {
-  const isLive = !!epg?.now;
-
   const handlePlayInMpv = () => {
     window.electronAPI.launchMPV(ch.url).catch(() => {});
   };
@@ -57,7 +83,7 @@ const ChannelRow = React.memo(({
   };
 
   const handleChannelInfo = () => {
-    toast.info(`${ch.tvg_name}\nGroup: ${ch.group_title}\nID: ${ch.id}`);
+    onChannelInfo(ch);
   };
 
   return (
@@ -70,32 +96,47 @@ const ChannelRow = React.memo(({
               ? 'bg-white/10 border-l-2 border-white'
               : 'hover:bg-white/5 border-l-2 border-transparent'
           }`}
-          style={{ height: 64 }}
+          style={{ height: 72 }}
         >
           {showNumbers && ch.tvg_chno && (
             <span className="w-7 text-right text-[11px] text-text-tertiary font-mono flex-shrink-0">{ch.tvg_chno}</span>
           )}
           {showLogos && (
-            <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-bg-elevated">
-              <ChannelLogo name={ch.tvg_name} logo={ch.tvg_logo} size={40} />
+            <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-bg-elevated">
+              <ChannelLogo name={ch.tvg_name} logo={ch.tvg_logo} size={48} />
             </div>
           )}
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleFavorite(ch); }}
-            className="p-1.5 rounded-lg hover:bg-white/5 flex-shrink-0 ml-1"
-            title={ch.is_favorite ? 'Remove from Favorites' : 'Add to Favorites'}
-          >
-            <Star size={14} weight={ch.is_favorite ? 'fill' : 'regular'} className={ch.is_favorite ? 'text-gold' : 'text-text-tertiary hover:text-white'} />
-          </button>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium truncate">{ch.tvg_name}</span>
+              <span className="text-sm font-semibold truncate">{ch.tvg_name}</span>
             </div>
-            {epg?.now && (
-              <p className="text-xs text-text-tertiary truncate mt-0.5">{epg.now.title}</p>
+            {epg?.now ? (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] text-text-tertiary font-mono">{formatEpgTime(epg.now.start_time)}</span>
+                <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-accent rounded-full" style={{ width: `${epg.progress || 0}%` }} />
+                </div>
+                <span className="text-[10px] text-text-tertiary font-mono">{formatEpgTime(epg.now.end_time)}</span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-text-tertiary mt-0.5">No program information</p>
             )}
           </div>
-          {isLive && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(ch); }}
+            className="p-1.5 rounded-lg hover:bg-white/5 flex-shrink-0"
+            title={ch.is_favorite ? 'Remove from Favorites' : 'Add to Favorites'}
+          >
+            <Star size={14} weight={ch.is_favorite ? 'fill' : 'regular'} className={ch.is_favorite ? 'text-gold' : 'text-text-tertiary'} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onChannelInfo(ch); }}
+            className="p-1.5 rounded-lg hover:bg-white/5 flex-shrink-0"
+            title="Channel Info"
+          >
+            <Info size={14} className="text-text-tertiary" />
+          </button>
+          {epg?.now && (
             <span className="w-2 h-2 rounded-full bg-state-error animate-pulse flex-shrink-0" title="Live" />
           )}
         </button>
@@ -164,6 +205,9 @@ const LiveTV: React.FC = () => {
   const [categoryChannels, setCategoryChannels] = useState<any[]>([]);
   const [loadingCat, setLoadingCat] = useState(false);
   const [epgData, setEpgData] = useState<Record<string, { now: any; next: any }>>({});
+  const [infoChannel, setInfoChannel] = useState<any>(null);
+  const [epgSelectedDate, setEpgSelectedDate] = useState(new Date());
+  const [epgPrograms, setEpgPrograms] = useState<any[]>([]);
 
   const debouncedCategorySearch = useDebounce(categorySearch, 250);
 
@@ -252,6 +296,12 @@ const LiveTV: React.FC = () => {
     window.electronAPI.getBatchNowNext(tvgIds).then(setEpgData).catch(() => {});
   }, [sortedChannels]);
 
+  useEffect(() => {
+    if (!currentChannel?.tvg_id) { setEpgPrograms([]); return; }
+    window.electronAPI.getEpgForChannel(currentChannel.tvg_id)
+      .then(setEpgPrograms).catch(() => setEpgPrograms([]));
+  }, [currentChannel?.tvg_id, epgSelectedDate]);
+
   const handlePlaylistSwitch = async (id: string) => {
     setActivePlaylistId(id);
     await loadChannels(id);
@@ -299,6 +349,16 @@ const LiveTV: React.FC = () => {
     setActiveGroup('All');
     setCategorySearch('');
   };
+
+  const handleChannelInfo = useCallback((ch: any) => setInfoChannel(ch), []);
+
+  const adjustEpgDate = useCallback((delta: number) => {
+    setEpgSelectedDate(prev => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + delta);
+      return d;
+    });
+  }, []);
 
   const parentRef = useRef<HTMLDivElement>(null);
   const categoryVirtualizer = useVirtualizer({
@@ -470,12 +530,16 @@ const LiveTV: React.FC = () => {
             <div className="flex flex-col items-center justify-center py-16 text-center px-4">
               <Television size={28} className="text-text-tertiary mb-3" />
               <p className="text-text-secondary text-sm">No channels found</p>
+              <p className="text-xs text-text-tertiary mt-2">Try selecting a different category or playlist.</p>
+              <button onClick={handleHome} className="mt-4 px-4 py-2 bg-white/10 rounded-xl text-xs hover:bg-white/20 transition-colors">Show All Channels</button>
             </div>
           ) : (
             <div style={{ height: channelVirtualizer.getTotalSize(), position: 'relative' }}>
               {channelVirtualizer.getVirtualItems().map((virtualRow) => {
                 const ch = sortedChannels[virtualRow.index];
                 if (!ch) return null;
+                const epg = epgData[ch.tvg_id] || null;
+                const epgWithProgress = epg ? { ...epg, progress: epg.now ? computeEpgProgress(epg.now) : 0 } : null;
                 return (
                   <div
                     key={ch.id}
@@ -493,9 +557,10 @@ const LiveTV: React.FC = () => {
                       isActive={currentChannel?.id === ch.id}
                       showLogos={showLogos}
                       showNumbers={showNumbers}
-                      epg={epgData[ch.tvg_id] || null}
+                      epg={epgWithProgress}
                       onSelect={setCurrentChannel}
                       onToggleFavorite={handleToggleFavorite}
+                      onChannelInfo={handleChannelInfo}
                     />
                   </div>
                 );
@@ -569,44 +634,39 @@ const LiveTV: React.FC = () => {
             <div className="aspect-video w-full bg-black flex-shrink-0">
               <VideoPlayer />
             </div>
-            <div className="flex-1 px-6 py-4 bg-bg-base overflow-y-auto">
-              <h3 className="text-[11px] uppercase tracking-wider text-text-tertiary font-semibold mb-3">
-                CURRENT PROGRAM
-              </h3>
-              {currentEpg?.now ? (
-                <div>
-                  <p className="text-sm font-medium text-white">{currentEpg.now.title}</p>
-                  {currentEpg.now.description && (
-                    <p className="text-xs text-text-tertiary mt-1 line-clamp-2">{currentEpg.now.description}</p>
-                  )}
-                  <p className="text-xs text-text-tertiary mt-2">
-                    {new Date().toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                    , {new Date().toLocaleDateString('en-US', { weekday: 'long' })}
-                  </p>
-                  {currentEpg.next && (
-                    <div className="mt-3 pt-3 border-t border-border-subtle">
-                      <p className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1">Next</p>
-                      <p className="text-xs text-text-secondary">{currentEpg.next.title}</p>
-                    </div>
+            {currentChannel && (
+              <div className="border-t border-border-subtle bg-bg-base">
+                {/* Date navigation */}
+                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle">
+                  <button onClick={() => adjustEpgDate(-1)} className="p-1.5 rounded-lg hover:bg-white/5 text-text-tertiary"><CaretLeft size={14} weight="bold" /></button>
+                  <span className="text-sm font-medium">{formatEpgDate(epgSelectedDate)}</span>
+                  <button onClick={() => adjustEpgDate(1)} className="p-1.5 rounded-lg hover:bg-white/5 text-text-tertiary"><CaretRight size={14} weight="bold" /></button>
+                </div>
+
+                {/* Program list */}
+                <div className="max-h-[280px] overflow-y-auto px-4 py-3 space-y-2">
+                  {epgPrograms.length === 0 ? (
+                    <p className="text-xs text-text-tertiary text-center py-4">No EPG data available</p>
+                  ) : (
+                    epgPrograms.map((prog: any) => (
+                      <div key={prog.id} className={`p-3 rounded-xl border ${isEpgCurrent(prog) ? 'border-accent/30 bg-accent/5' : 'border-border-subtle'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[11px] text-text-tertiary font-mono">{formatEpgTime(prog.start_time)} — {formatEpgTime(prog.end_time)}</span>
+                          {isEpgCurrent(prog) && <span className="text-[9px] px-1.5 py-0.5 bg-state-error text-white rounded font-bold uppercase tracking-wider">LIVE</span>}
+                        </div>
+                        <p className="text-sm font-medium">{prog.title}</p>
+                        {prog.description && <p className="text-xs text-text-tertiary mt-1 line-clamp-2">{prog.description}</p>}
+                        {isEpgCurrent(prog) && (
+                          <div className="h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
+                            <div className="h-full bg-accent rounded-full" style={{ width: `${computeEpgProgress(prog)}%` }} />
+                          </div>
+                        )}
+                      </div>
+                    ))
                   )}
                 </div>
-              ) : (
-                <div>
-                  <p className="text-xs text-text-tertiary">No program information available</p>
-                  <p className="text-xs text-text-tertiary mt-2">
-                    {new Date().toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center bg-black text-center px-8">
@@ -621,8 +681,44 @@ const LiveTV: React.FC = () => {
         )}
       </div>
     </div>
+      {infoChannel && <ChannelInfoModal channel={infoChannel} onClose={() => setInfoChannel(null)} onPlay={() => setCurrentChannel(infoChannel)} />}
     </div>
   );
 };
+
+const ChannelInfoModal: React.FC<{ channel: any; onClose: () => void; onPlay: () => void }> = ({ channel, onClose, onPlay }) => (
+  <div className="fixed inset-0 z-[200] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+    <div className="w-full max-w-lg bg-bg-overlay border border-border-strong rounded-2xl p-6" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="w-16 h-16 rounded-xl overflow-hidden bg-bg-elevated">
+          <ChannelLogo name={channel.tvg_name} logo={channel.tvg_logo} size={64} />
+        </div>
+        <div>
+          <h2 className="text-xl font-display font-bold">{channel.tvg_name}</h2>
+          <p className="text-sm text-text-tertiary">{channel.group_title}</p>
+        </div>
+      </div>
+      <div className="space-y-3 text-sm">
+        {channel.tvg_chno && <InfoLine label="Channel Number" value={channel.tvg_chno} />}
+        <InfoLine label="Group" value={channel.group_title} />
+        <InfoLine label="TVG ID" value={channel.tvg_id || '—'} />
+        <InfoLine label="Stream URL" value={channel.url} mono />
+      </div>
+      <div className="flex gap-2 mt-6">
+        <button onClick={() => { onPlay(); onClose(); }} className="flex-1 py-2.5 bg-white text-black rounded-xl font-medium text-sm">Play</button>
+        <button onClick={() => { window.electronAPI.launchMPV(channel.url); onClose(); }} className="px-4 py-2.5 border border-border-subtle rounded-xl text-sm">MPV</button>
+        <button onClick={() => { navigator.clipboard.writeText(channel.url); toast.success('URL copied'); }} className="px-4 py-2.5 border border-border-subtle rounded-xl text-sm">Copy URL</button>
+        <button onClick={onClose} className="px-4 py-2.5 border border-border-subtle rounded-xl text-sm">Close</button>
+      </div>
+    </div>
+  </div>
+);
+
+const InfoLine: React.FC<{ label: string; value: string; mono?: boolean }> = ({ label, value, mono }) => (
+  <div className="flex justify-between">
+    <span className="text-text-secondary">{label}</span>
+    <span className={`text-white text-right max-w-[300px] truncate ${mono ? 'font-mono text-xs' : ''}`}>{value}</span>
+  </div>
+);
 
 export default LiveTV;

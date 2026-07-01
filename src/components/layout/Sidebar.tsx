@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, Link } from 'react-router-dom';
 import * as Tooltip from '@radix-ui/react-tooltip';
 import { motion } from 'framer-motion';
 import {
@@ -10,6 +10,7 @@ import {
   Film,
   Tv,
   Clapperboard,
+  Download,
   Search,
   Settings,
 } from 'lucide-react';
@@ -90,7 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
 
         <div className="h-px bg-border-subtle mx-3 my-0.5" />
 
-        {/* Middle group: Movies, Live TV, Series */}
+        {/* Middle group: Movies, Live TV, Series, Downloads */}
         <nav className="flex flex-col items-center gap-2 w-full px-2">
           <Tooltip.Root>
             <Tooltip.Trigger asChild>
@@ -129,6 +130,20 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
               </NavLink>
             </Tooltip.Trigger>
             <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Series<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+          </Tooltip.Root>
+
+          <Tooltip.Root>
+            <Tooltip.Trigger asChild>
+              <Link to="/downloads" className="w-10 h-10 mx-auto rounded-xl flex items-center justify-center text-text-tertiary hover:text-white hover:bg-white/5 transition-colors">
+                <Download size={20} />
+              </Link>
+            </Tooltip.Trigger>
+            <Tooltip.Portal>
+              <Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">
+                Downloads
+                <Tooltip.Arrow className="fill-bg-overlay" />
+              </Tooltip.Content>
+            </Tooltip.Portal>
           </Tooltip.Root>
         </nav>
 

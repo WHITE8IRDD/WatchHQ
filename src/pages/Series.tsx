@@ -178,12 +178,17 @@ const Series: React.FC = () => {
 
   const toggleFavorite = async (s: SeriesItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    const result = await window.electronAPI.toggleSeriesFavorite(s.id);
-    setSeries((prev) =>
-      prev.map((i) =>
-        i.id === s.id ? { ...i, is_favorite: result.isFavorite ? 1 : 0 } : i,
-      ),
-    );
+    try {
+      const result = await window.electronAPI.toggleSeriesFavorite(s.id);
+      setSeries((prev) =>
+        prev.map((i) =>
+          i.id === s.id ? { ...i, is_favorite: result.isFavorite ? 1 : 0 } : i,
+        ),
+      );
+      toast.success(result.isFavorite ? 'Added to favorites' : 'Removed from favorites');
+    } catch (err: any) {
+      toast.error(err.message);
+    }
   };
 
   const categories = useMemo(() => {
