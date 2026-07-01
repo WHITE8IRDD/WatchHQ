@@ -37,6 +37,8 @@ function createWindow() {
       nodeIntegration: false,
       webSecurity: true,
       backgroundThrottling: false,
+      offscreen: false,
+      autoplayPolicy: 'no-user-gesture-required',
       allowRunningInsecureContent: false,
     },
     show: false,
@@ -73,6 +75,12 @@ function createWindow() {
 }
 
 app.commandLine.appendSwitch('remote-debugging-port', '9222');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,IntensiveWakeUpThrottling');
+app.commandLine.appendSwitch('enable-features', 'PlatformHEVCDecoderSupport');
 
 app.whenReady().then(async () => {
   console.log('[MAIN-1] App ready, initializing...');

@@ -194,6 +194,9 @@ const Settings: React.FC = () => {
             <SettingRow label="Auto-play Next Episode" description="Automatically play next episode in series">
               <Toggle value={prefValue('auto_play_next') === 1} onChange={(v) => stagePreference('auto_play_next', v ? 1 : 0)} />
             </SettingRow>
+            <SettingRow label="Auto-switch on failure" description="Switch to a similar channel if the current stream fails">
+              <Toggle value={prefValue('auto_failover') !== 0} onChange={(v) => stagePreference('auto_failover', v ? 1 : 0)} />
+            </SettingRow>
           </SettingSection>
         );
 

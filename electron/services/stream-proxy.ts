@@ -4,18 +4,21 @@ import { URL } from 'url';
 
 const httpAgent = new http.Agent({
   keepAlive: true,
-  keepAliveMsecs: 60000,
-  maxSockets: 100,
-  maxFreeSockets: 20,
-  timeout: 120000,
+  keepAliveMsecs: 120000,
+  maxSockets: 200,
+  maxFreeSockets: 50,
+  timeout: 0,
+  scheduling: 'lifo',
 });
 
 const httpsAgent = new https.Agent({
   keepAlive: true,
-  keepAliveMsecs: 60000,
-  maxSockets: 100,
-  maxFreeSockets: 20,
-  timeout: 120000,
+  keepAliveMsecs: 120000,
+  maxSockets: 200,
+  maxFreeSockets: 50,
+  timeout: 0,
+  rejectUnauthorized: false,
+  scheduling: 'lifo',
 });
 
 let proxyServer: http.Server | null = null;
@@ -38,7 +41,6 @@ function doRequest(url: string, extraHeaders: Record<string, string>): Promise<{
   return new Promise((resolve, reject) => {
     const parsedUrl = new URL(url);
     const client = parsedUrl.protocol === 'https:' ? https : http;
-
     const agent = client === https ? httpsAgent : httpAgent;
     const proxyReq = client.request(url, {
       method: 'GET',
@@ -49,12 +51,10 @@ function doRequest(url: string, extraHeaders: Record<string, string>): Promise<{
         ...extraHeaders,
       },
       agent,
-      timeout: 120000,
     }, (proxyRes) => {
       resolve({ statusCode: proxyRes.statusCode || 200, headers: proxyRes.headers, stream: proxyRes });
     });
     proxyReq.on('error', reject);
-    proxyReq.on('timeout', () => { proxyReq.destroy(); reject(new Error('Timeout')); });
     proxyReq.end();
   });
 }
@@ -104,8 +104,19 @@ export function startStreamProxy(): Promise<number> {
             }
           }
           res.writeHead(result.statusCode, responseHeaders);
-          result.stream.pipe(res);
-          req.on('close', () => result.stream.destroy());
+          result.stream.pipe(res, { end: true });
+          result.stream.on('error', (err) => {
+            console.warn('[proxy] upstream error:', err.message);
+            if (!res.headersSent) res.writeHead(502);
+            res.end();
+          });
+          res.on('error', (err) => {
+            console.warn('[proxy] client error:', err.message);
+            result.stream.destroy();
+          });
+          req.on('close', () => {
+            if (!result.stream.destroyed) result.stream.destroy();
+          });
           return;
         } catch (err: any) {
           console.log('[PROXY-5]', err.message, 'for', currentUrl.substring(0, 60));
@@ -120,10 +131,10 @@ export function startStreamProxy(): Promise<number> {
       if (!res.headersSent) { res.writeHead(502); res.end('Too many redirects'); }
     });
 
-    proxyServer.keepAliveTimeout = 120000;
-    proxyServer.headersTimeout = 125000;
+    proxyServer.keepAliveTimeout = 300000;
+    proxyServer.headersTimeout = 305000;
     proxyServer.requestTimeout = 0;
-    proxyServer.maxConnections = 200;
+    proxyServer.maxConnections = 500;
 
     proxyServer.listen(0, '127.0.0.1', () => {
       const addr = proxyServer!.address();
