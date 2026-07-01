@@ -8,10 +8,10 @@ import {
 } from '@phosphor-icons/react';
 import VideoPlayer from '../components/player/VideoPlayer';
 import AddPlaylistModal from '../components/playlist/AddPlaylistModal';
-import SearchInput from '../components/common/SearchInput';
 import ChannelLogo from '../components/common/ChannelLogo';
 import CommandPalette from '../components/common/CommandPalette';
 import ManageCategoriesModal from '../components/livetv/ManageCategoriesModal';
+import AdvancedSearchBar from '../components/livetv/AdvancedSearchBar';
 import { toast } from '../components/common/Toast';
 import { useDebounce } from '../hooks/useDebounce';
 import { ChannelGridSkeleton } from '../components/common/Skeleton';
@@ -48,18 +48,24 @@ const LiveTV: React.FC = () => {
   const [categories, setCategories] = useState<{ id: string; group_title: string; count: number }[]>([]);
   const [categoryChannels, setCategoryChannels] = useState<any[]>([]);
   const [loadingCat, setLoadingCat] = useState(false);
+  const [advancedSearchResults, setAdvancedSearchResults] = useState<any[] | null>(null);
 
   useEffect(() => { loadPlaylists().then(() => { const s = usePlaylistStore.getState(); if (s.playlists.length > 0) { setActivePlaylistId(s.playlists[0].id); loadChannels(s.playlists[0].id); } }); }, []);
 
-  // Load visible categories
+  // Load visible categories (with fallback to groups for M3U imports)
   useEffect(() => {
     if (!activePlaylistId) return;
     (async () => {
-      const visible = await window.electronAPI.getVisibleCategories(activePlaylistId);
+      let visible = await window.electronAPI.getVisibleCategories(activePlaylistId);
+      if (!visible || visible.length === 0) {
+        const groups = await window.electronAPI.getGroups(activePlaylistId);
+        visible = groups.map((g: any) => ({ id: g.group_title, group_title: g.group_title }));
+        console.log('[LiveTV] Fallback to groups:', visible.length);
+      }
       const chs = await window.electronAPI.getChannels(activePlaylistId);
       const counts: Record<string, number> = { All: chs.length };
       for (const ch of chs) counts[ch.group_title] = (counts[ch.group_title] || 0) + 1;
-      setCategories(visible.map(v => ({ ...v, count: counts[v.group_title] || 0 })));
+      setCategories(visible.map((v: any) => ({ ...v, count: counts[v.group_title] || 0 })));
     })();
   }, [activePlaylistId, channels]);
 
@@ -69,7 +75,9 @@ const LiveTV: React.FC = () => {
     setLoadingCat(true);
     (async () => {
       try {
-        if (debouncedSearch || showFavoritesOnly) {
+        if (advancedSearchResults !== null) {
+          setCategoryChannels(advancedSearchResults.slice(0, CHANNELS_PER_PAGE));
+        } else if (debouncedSearch || showFavoritesOnly) {
           const result = await window.electronAPI.searchChannels({
             playlistId: activePlaylistId,
             query: debouncedSearch || '',
@@ -89,7 +97,7 @@ const LiveTV: React.FC = () => {
         }
       } finally { setLoadingCat(false); }
     })();
-  }, [activePlaylistId, activeGroup, debouncedSearch, showFavoritesOnly]);
+  }, [activePlaylistId, activeGroup, debouncedSearch, showFavoritesOnly, advancedSearchResults]);
 
   // EPG for visible channels
   useEffect(() => {
@@ -103,6 +111,7 @@ const LiveTV: React.FC = () => {
     await loadChannels(id);
     setActiveGroup('All');
     setSearchQuery('');
+    setAdvancedSearchResults(null);
   };
 
   const handleRefresh = async () => {
@@ -195,9 +204,17 @@ const LiveTV: React.FC = () => {
       {/* ── MIDDLE: Channel List (280px) ── */}
       <div className="w-[280px] flex-shrink-0 border-r border-border-subtle h-full flex flex-col bg-bg-base">
         {/* Search bar */}
-        <div className="px-3 py-3 border-b border-border-subtle flex-shrink-0">
-          <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search..." className="w-full" />
-        </div>
+        {activePlaylistId && (
+          <AdvancedSearchBar
+            playlistId={activePlaylistId}
+            onResults={(results) => {
+              setAdvancedSearchResults(results);
+              if (results.length === 0 || (results[0] && results[0].query !== searchQuery)) {
+                // Sync searchQuery for backward compat
+              }
+            }}
+          />
+        )}
 
         {/* Channel list */}
         <div ref={channelParentRef} className="flex-1 overflow-y-auto" style={{ contain: 'strict' }}>

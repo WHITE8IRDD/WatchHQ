@@ -1,22 +1,50 @@
 import { ipcMain } from 'electron';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import { getDb } from '../services/database';
 import * as stalker from '../services/stalker';
 import { URL } from 'url';
+import path from 'path';
+import os from 'os';
+import { existsSync } from 'fs';
 
-function getMpvPath(): string {
+function getMpvPath(): string | null {
   try {
     const db = getDb();
     const prefs = db.prepare('SELECT mpv_path FROM user_preferences WHERE id = 1').get() as any;
     if (prefs?.mpv_path) return prefs.mpv_path;
   } catch {}
-  return 'mpv';
+
+  // bundled copy
+  const bundled = path.join(process.resourcesPath || '', 'mpv', 'mpv.exe');
+  if (existsSync(bundled)) return bundled;
+
+  // system PATH
+  try {
+    const whichResult = execSync('where mpv', { encoding: 'utf8', timeout: 3000 }).trim();
+    if (whichResult && existsSync(whichResult)) return whichResult;
+  } catch {}
+
+  // common install paths
+  const candidates = [
+    'C:\\Program Files\\mpv\\mpv.exe',
+    'C:\\Program Files (x86)\\mpv\\mpv.exe',
+    path.join(os.homedir(), 'scoop', 'apps', 'mpv', 'current', 'mpv.exe'),
+    path.join(os.homedir(), 'AppData', 'Local', 'Programs', 'mpv', 'mpv.exe'),
+  ];
+  for (const c of candidates) {
+    if (existsSync(c)) return c;
+  }
+
+  return null;
 }
 
 export function registerPlayerHandlers() {
   ipcMain.handle('player:mpv', async (_event, url: string, options?: { fullscreen?: boolean }) => {
+    const mpvPath = getMpvPath();
+    if (!mpvPath) {
+      return { success: false, error: 'MPV not found. Download from https://mpv.io/installation/' };
+    }
     return new Promise((resolve) => {
-      const mpvPath = getMpvPath();
       let origin = '';
       try { origin = new URL(url).origin + '/'; } catch {}
 
@@ -94,8 +122,12 @@ export function registerPlayerHandlers() {
   });
 
   ipcMain.handle('player:checkAvailability', async (_event, player: 'mpv' | 'vlc') => {
+    if (player === 'mpv') {
+      const mpvPath = getMpvPath();
+      if (!mpvPath) return { available: false };
+    }
     return new Promise((resolve) => {
-      const cmd = getMpvPath();
+      const cmd = player === 'vlc' ? 'vlc' : (getMpvPath() || 'mpv');
       const proc = spawn(cmd, ['--version'], { stdio: 'pipe' });
       let output = '';
       proc.stdout?.on('data', (d) => (output += d.toString()));
@@ -107,8 +139,11 @@ export function registerPlayerHandlers() {
   });
 
   ipcMain.handle('launchMPV', async (_event, url: string) => {
+    const mpvPath = getMpvPath();
+    if (!mpvPath) {
+      return { success: false, error: 'MPV not found. Download from https://mpv.io/installation/' };
+    }
     return new Promise((resolve) => {
-      const mpvPath = getMpvPath();
       let origin = '';
       try { origin = new URL(url).origin + '/'; } catch {}
       const args = [

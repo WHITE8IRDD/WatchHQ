@@ -267,12 +267,14 @@ async function importXtream(playlistId: string, data: any): Promise<number> {
   const prepared = liveStreams.map((ch: any) => ({
     id: uuidv4(), playlist_id: playlistId, stream_id: String(ch.stream_id),
     tvg_id: String(ch.epg_channel_id || ''), tvg_name: ch.name,
-    tvg_logo: ch.stream_icon || null, tvg_chno: String(ch.num || ''),
+    tvg_logo: ch.stream_icon?.startsWith('http') ? ch.stream_icon : null,
+    tvg_chno: String(ch.num || ''),
     group_title: catMap.get(ch.category_id) || 'Uncategorized',
     url: xtream.buildLiveStreamUrl(cfg, ch.stream_id, 'ts'),
     url_fallback: xtream.buildLiveStreamUrl(cfg, ch.stream_id, 'm3u8'),
   }));
 
+  console.log('[ImportXtream] First 3 prepared channels:', JSON.stringify(prepared.slice(0, 3).map((p: any) => ({ name: p.tvg_name, logo: p.tvg_logo }))));
   channelQueries.bulkInsert(prepared);
   return liveStreams.length;
 }

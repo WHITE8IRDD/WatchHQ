@@ -4,7 +4,7 @@ import { getDb } from '../services/database';
 export function registerCategoryHandlers() {
   ipcMain.handle('categories:getAll', async (_event, playlistId: string) => {
     try {
-      const rows = getDb().prepare(`SELECT id, group_title, is_hidden FROM playlist_categories WHERE playlist_id = ? ORDER BY group_title`).all(playlistId);
+      const rows = getDb().prepare(`SELECT id, category_name AS group_title, is_hidden FROM playlist_categories WHERE playlist_id = ? ORDER BY category_name`).all(playlistId);
       return rows as { id: string; group_title: string; is_hidden: number }[];
     } catch (err: any) {
       return [];
@@ -26,7 +26,7 @@ export function registerCategoryHandlers() {
 
   ipcMain.handle('categories:getVisible', async (_event, playlistId: string) => {
     try {
-      const rows = getDb().prepare(`SELECT id, group_title FROM playlist_categories WHERE playlist_id = ? AND (is_hidden IS NULL OR is_hidden = 0) ORDER BY group_title`).all(playlistId);
+      const rows = getDb().prepare(`SELECT id, category_name AS group_title FROM playlist_categories WHERE playlist_id = ? AND (is_hidden IS NULL OR is_hidden = 0) ORDER BY category_name`).all(playlistId);
       return rows as { id: string; group_title: string }[];
     } catch (err: any) {
       return [];

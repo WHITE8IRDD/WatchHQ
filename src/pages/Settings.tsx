@@ -1,6 +1,6 @@
 // src/pages/Settings.tsx
 import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Playlist,
   Broadcast,
@@ -24,8 +24,15 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import * as ContextMenu from '@radix-ui/react-context-menu';
 import { staggerContainer, fadeInUp } from '../lib/motion';
 
+function flattenPrefs(prefs: any): Record<string, any> {
+  if (!prefs) return {};
+  const { id, updated_at, ...rest } = prefs as any;
+  return rest;
+}
+
 const Settings: React.FC = () => {
   const { prefs, loadPreferences, updatePreference } = usePreferencesStore();
+  const [pendingChanges, setPendingChanges] = useState<Record<string, any>>({});
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [epgUrl, setEpgUrl] = useState('');
   const [epgSources, setEpgSources] = useState<any[]>([]);
@@ -37,6 +44,34 @@ const Settings: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [locatingMpv, setLocatingMpv] = useState(false);
   const [locatingVlc, setLocatingVlc] = useState(false);
+
+  const stagePreference = (key: string, value: any) => {
+    setPendingChanges((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const prefValue = (key: string): any => {
+    if (key in pendingChanges) return pendingChanges[key];
+    return (prefs as any)?.[key];
+  };
+
+  const hasChanges = Object.keys(pendingChanges).length > 0;
+
+  const savePreferences = async () => {
+    try {
+      for (const [key, value] of Object.entries(pendingChanges)) {
+        await updatePreference(key, value);
+      }
+      setPendingChanges({});
+      toast.success('Preferences saved');
+    } catch (err: any) {
+      toast.error('Failed to save: ' + err.message);
+    }
+  };
+
+  const discardChanges = () => {
+    setPendingChanges({});
+    toast.info('Changes discarded');
+  };
 
   useEffect(() => {
     (async () => {
@@ -287,8 +322,8 @@ const Settings: React.FC = () => {
             <div>
               <label className="text-xs text-text-tertiary mb-1.5 block">Default Player</label>
               <select
-                value={prefs?.player_type || 'internal'}
-                onChange={(e) => updatePreference('player_type', e.target.value)}
+                value={prefValue('player_type') || 'internal'}
+                onChange={(e) => stagePreference('player_type', e.target.value)}
                 className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20"
               >
                 <option value="internal">Internal (HLS.js)</option>
@@ -306,7 +341,7 @@ const Settings: React.FC = () => {
                   <XCircle size={14} className="text-state-error" weight="fill" />
                 )}
                 <span className="text-sm text-text-secondary">
-                  MPV: {playerStatus.mpv?.available ? `Detected at ${prefs?.mpv_path || 'default path'}` : 'Not found'}
+                  MPV: {playerStatus.mpv?.available ? `Detected at ${prefValue('mpv_path') || 'default path'}` : 'Not found'}
                 </span>
               </div>
               <button
@@ -327,7 +362,7 @@ const Settings: React.FC = () => {
                   <XCircle size={14} className="text-state-error" weight="fill" />
                 )}
                 <span className="text-sm text-text-secondary">
-                  VLC: {playerStatus.vlc?.available ? `Detected at ${prefs?.vlc_path || 'default path'}` : 'Not found'}
+                  VLC: {playerStatus.vlc?.available ? `Detected at ${prefValue('vlc_path') || 'default path'}` : 'Not found'}
                 </span>
               </div>
               <button
@@ -342,20 +377,20 @@ const Settings: React.FC = () => {
             <ToggleSetting
               label="Hardware Acceleration"
               description="Use GPU for video decoding"
-              checked={prefs?.hardware_acceleration === 1}
-              onChange={(v) => updatePreference('hardware_acceleration', v ? 1 : 0)}
+              checked={prefValue('hardware_acceleration') === 1}
+              onChange={(v) => stagePreference('hardware_acceleration', v ? 1 : 0)}
             />
             <ToggleSetting
               label="Remember Playback Position"
               description="Resume from where you left off"
-              checked={prefs?.remember_position === 1}
-              onChange={(v) => updatePreference('remember_position', v ? 1 : 0)}
+              checked={prefValue('remember_position') === 1}
+              onChange={(v) => stagePreference('remember_position', v ? 1 : 0)}
             />
             <ToggleSetting
               label="Auto-Play Next Episode"
               description="Automatically play next episode in series"
-              checked={prefs?.auto_play_next === 1}
-              onChange={(v) => updatePreference('auto_play_next', v ? 1 : 0)}
+              checked={prefValue('auto_play_next') === 1}
+              onChange={(v) => stagePreference('auto_play_next', v ? 1 : 0)}
             />
           </div>
         </Card>
@@ -366,8 +401,8 @@ const Settings: React.FC = () => {
             <div>
               <label className="text-xs text-text-tertiary mb-1.5 block">Grid Size</label>
               <select
-                value={prefs?.grid_size || 'medium'}
-                onChange={(e) => updatePreference('grid_size', e.target.value)}
+                value={prefValue('grid_size') || 'medium'}
+                onChange={(e) => stagePreference('grid_size', e.target.value)}
                 className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20"
               >
                 <option value="small">Small (140px)</option>
@@ -378,8 +413,8 @@ const Settings: React.FC = () => {
             <div>
               <label className="text-xs text-text-tertiary mb-1.5 block">Sort Channels By</label>
               <select
-                value={prefs?.sort_channels_by || 'name'}
-                onChange={(e) => updatePreference('sort_channels_by', e.target.value)}
+                value={prefValue('sort_channels_by') || 'name'}
+                onChange={(e) => stagePreference('sort_channels_by', e.target.value)}
                 className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20"
               >
                 <option value="name">Name</option>
@@ -390,13 +425,13 @@ const Settings: React.FC = () => {
             </div>
             <ToggleSetting
               label="Show Channel Numbers"
-              checked={prefs?.show_channel_numbers === 1}
-              onChange={(v) => updatePreference('show_channel_numbers', v ? 1 : 0)}
+              checked={prefValue('show_channel_numbers') === 1}
+              onChange={(v) => stagePreference('show_channel_numbers', v ? 1 : 0)}
             />
             <ToggleSetting
               label="Show Channel Logos"
-              checked={prefs?.show_channel_logos === 1}
-              onChange={(v) => updatePreference('show_channel_logos', v ? 1 : 0)}
+              checked={prefValue('show_channel_logos') === 1}
+              onChange={(v) => stagePreference('show_channel_logos', v ? 1 : 0)}
             />
           </div>
         </Card>
@@ -476,6 +511,37 @@ const Settings: React.FC = () => {
           onCancel={() => setConfirmClearAll(false)}
         />
       )}
+
+      {/* Sticky Save/Discard bar */}
+      <AnimatePresence>
+        {hasChanges && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            className="fixed bottom-0 left-[72px] right-0 z-50 bg-bg-elevated/95 backdrop-blur-xl border-t border-border-subtle px-8 py-4 flex items-center justify-between"
+          >
+            <p className="text-sm text-text-secondary">
+              <span className="text-white font-medium">{Object.keys(pendingChanges).length}</span> pending change(s)
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={discardChanges}
+                className="px-5 py-2.5 text-sm border border-border-subtle rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
+              >
+                Discard
+              </button>
+              <button
+                onClick={savePreferences}
+                className="px-5 py-2.5 text-sm bg-white text-black rounded-xl font-medium hover:bg-white/90 transition-colors"
+              >
+                Save Changes
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

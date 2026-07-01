@@ -33,6 +33,7 @@ const VideoPlayer: React.FC = () => {
   const mpegtsRef = useRef<mpegts.Player | null>(null);
   const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fallbackAttemptedRef = useRef(false);
 
   const currentChannel = usePlaylistStore((s) => s.currentChannel);
   const channels = usePlaylistStore((s) => s.channels);
@@ -81,11 +82,35 @@ const VideoPlayer: React.FC = () => {
     let cancelled = false;
     let firstFrame = false;
 
-    // 8s timeout: if no frame, trigger fallback
+    // 8s timeout: if no frame, try alt URL first, then MPV
     fallbackTimeoutRef.current = setTimeout(() => {
       if (firstFrame || cancelled) return;
       log('[PLAY] 8s timeout — no first frame');
-      attemptFallback();
+      if (!fallbackAttemptedRef.current) {
+        fallbackAttemptedRef.current = true;
+        const url = currentChannel!.url;
+        if (url.endsWith('.ts')) {
+          const alt = url.replace(/\.ts$/, '.m3u8');
+          log('[PLAY] Timeout: trying .m3u8 alt');
+          loadStream(alt, true, () => {
+            log('[PLAY] Alt also failed → MPV');
+            window.electronAPI.launchMPV(currentChannel!.url);
+            setError('Stream unsupported — playing in MPV');
+          });
+        } else if (url.endsWith('.m3u8')) {
+          const alt = url.replace(/\.m3u8$/, '.ts');
+          log('[PLAY] Timeout: trying .ts alt');
+          loadStream(alt, true, () => {
+            log('[PLAY] Alt also failed → MPV');
+            window.electronAPI.launchMPV(currentChannel!.url);
+            setError('Stream unsupported — playing in MPV');
+          });
+        } else {
+          log('[PLAY] Timeout: no alt format → MPV');
+          window.electronAPI.launchMPV(currentChannel!.url);
+          setError('Stream unsupported — playing in MPV');
+        }
+      }
     }, 8000);
 
     const markPlaying = () => {
@@ -129,13 +154,6 @@ const VideoPlayer: React.FC = () => {
 
       player.on(mpegts.Events.ERROR, (type: string, detail: string, info: any) => {
         log('[PLAY-MSE-ERR]', type, detail);
-        if (info?.videoCodec && /hev|hvc|h265/i.test(info.videoCodec)) {
-          log('[PLAY] HEVC → MPV');
-          try { player.destroy(); } catch {}
-          window.electronAPI.launchMPV(currentChannel!.url);
-          setError('HEVC codec — playing in MPV');
-          return;
-        }
         if (!firstFrame && !cancelled) {
           log('[PLAY] Error before first frame, attempting fallback');
           attemptFallback();
@@ -145,7 +163,8 @@ const VideoPlayer: React.FC = () => {
       player.on(mpegts.Events.MEDIA_INFO, (info: any) => {
         log('[PLAY-MSE-INFO]', info);
         const codec = (info?.videoCodec || '').toLowerCase();
-        if (/hev|hvc|h265/.test(codec)) {
+        log('[PLAY] Detected codec:', codec);
+        if (/^hev1|^hvc1|^hevc$/i.test(codec)) {
           log('[PLAY] HEVC on MEDIA_INFO → MPV');
           try { player.destroy(); } catch {}
           window.electronAPI.launchMPV(currentChannel!.url);
@@ -177,11 +196,11 @@ const VideoPlayer: React.FC = () => {
     destroyEngines();
 
     let cancelled = false;
-    let fallbackDone = false;
+    fallbackAttemptedRef.current = false;
 
     const tryFallback = () => {
-      if (cancelled || fallbackDone) return;
-      fallbackDone = true;
+      if (cancelled || fallbackAttemptedRef.current) return;
+      fallbackAttemptedRef.current = true;
       const url = currentChannel.url;
       const urlFallback = (currentChannel as any).url_fallback;
 
@@ -195,19 +214,25 @@ const VideoPlayer: React.FC = () => {
       } else if (url.endsWith('.ts')) {
         const alt = url.replace(/\.ts$/, '.m3u8');
         log('[PLAY] Fallback .ts→.m3u8:', alt.substring(0, 80));
-        loadStream(alt, true, () => {
-          log('[PLAY] Both formats failed → MPV');
-          window.electronAPI.launchMPV(currentChannel.url);
-          setError('Stream unsupported — playing in MPV');
-        });
+        if (!fallbackAttemptedRef.current) {
+          fallbackAttemptedRef.current = true;
+          loadStream(alt, true, () => {
+            log('[PLAY] Both formats failed → MPV');
+            window.electronAPI.launchMPV(currentChannel.url);
+            setError('Stream unsupported — playing in MPV');
+          });
+        }
       } else if (url.endsWith('.m3u8')) {
         const alt = url.replace(/\.m3u8$/, '.ts');
         log('[PLAY] Fallback .m3u8→.ts:', alt.substring(0, 80));
-        loadStream(alt, true, () => {
-          log('[PLAY] Both formats failed → MPV');
-          window.electronAPI.launchMPV(currentChannel.url);
-          setError('Stream unsupported — playing in MPV');
-        });
+        if (!fallbackAttemptedRef.current) {
+          fallbackAttemptedRef.current = true;
+          loadStream(alt, true, () => {
+            log('[PLAY] Both formats failed → MPV');
+            window.electronAPI.launchMPV(currentChannel.url);
+            setError('Stream unsupported — playing in MPV');
+          });
+        }
       } else {
         log('[PLAY] No fallback available → MPV');
         window.electronAPI.launchMPV(currentChannel.url);

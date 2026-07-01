@@ -5,7 +5,7 @@ import { app } from 'electron';
 
 let db: Database.Database;
 
-const CURRENT_SCHEMA_VERSION = 4;
+const CURRENT_SCHEMA_VERSION = 5;
 
 export function initDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'watchhq.db');
@@ -303,6 +303,11 @@ function runMigrations() {
   if (currentVersion < 4) {
     try { db.exec(`ALTER TABLE playlist_categories ADD COLUMN is_hidden INTEGER DEFAULT 0;`); } catch {}
     currentVersion = 4;
+  }
+
+  if (currentVersion < 5) {
+    try { db.exec(`UPDATE playlist_categories SET is_hidden = 0 WHERE is_hidden IS NULL;`); } catch {}
+    currentVersion = 5;
   }
 
   db.prepare('UPDATE schema_version SET version = ? WHERE id = 1').run(CURRENT_SCHEMA_VERSION);

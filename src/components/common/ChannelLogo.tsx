@@ -44,6 +44,22 @@ const ChannelLogo: React.FC<ChannelLogoProps> = React.memo(({ name, logo, size =
     const el = ref.current;
     if (!el) return;
 
+    // Check if already visible (catches items in virtual lists)
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (rect.left < vw && rect.right > 0 && rect.top < vh && rect.bottom > 0) {
+      window.electronAPI.fetchImage(logo).then((res) => {
+        if (res && res.dataUrl) {
+          objUrlRef.current = res.dataUrl;
+          setImgSrc(res.dataUrl);
+        } else {
+          setFailed(true);
+        }
+      });
+      return;
+    }
+
     const obs = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         window.electronAPI.fetchImage(logo).then((res) => {
