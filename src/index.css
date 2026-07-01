@@ -2,14 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root {
-  height: 100%;
-  margin: 0;
-  background-color: #0A0A0F;
-  color: #FFFFFF;
+@layer base {
+  :root {
+    --bg-base: #0A0A0F;
+    --bg-elevated: #12121A;
+    --bg-overlay: #1A1A24;
+    --bg-hover: #22222E;
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-default: rgba(255,255,255,0.10);
+    --border-strong: rgba(255,255,255,0.16);
+    --accent: #FFFFFF;
+    --accent-hover: #F5F5F7;
+    --text-primary: #FFFFFF;
+    --text-secondary: #A1A1AA;
+    --text-tertiary: #52525B;
+    --status-live: #EF4444;
+    --status-success: #22C55E;
+    --status-warning: #EAB308;
+    --status-info: #3B82F6;
+    --gold: #FFD60A;
+  }
+
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'Geist', 'Inter', system-ui, sans-serif;
+    line-height: 1.2;
+  }
+
+  h1 { font-size: 56px; font-weight: 700; }
+  h2 { font-size: 40px; font-weight: 700; }
+  h3 { font-size: 28px; font-weight: 600; }
+  h4 { font-size: 20px; font-weight: 600; }
+
+  kbd {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+  }
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+@layer utilities {
+  .text-scale-12 { font-size: 12px; }
+  .text-scale-14 { font-size: 14px; }
+  .text-scale-16 { font-size: 16px; }
+  .text-scale-20 { font-size: 20px; }
+  .text-scale-28 { font-size: 28px; }
+  .text-scale-40 { font-size: 40px; }
+  .text-scale-56 { font-size: 56px; }
+}

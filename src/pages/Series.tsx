@@ -1,14 +1,5 @@
-// src/pages/Series.tsx
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
-import {
-  Clapperboard,
-  ChevronLeft,
-  Play,
-  Heart,
-  Star,
-  X,
-  Check,
-} from 'lucide-react';
+import { Clapperboard, ChevronLeft, Play, Heart, Star, X, Check } from 'lucide-react';
 import { ArrowClockwise } from '@phosphor-icons/react';
 import SearchInput from '../components/common/SearchInput';
 import VirtualGrid from '../components/common/VirtualGrid';
@@ -46,6 +37,13 @@ interface Episode {
   is_watched: number;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
+  ]);
+}
+
 const Series: React.FC = () => {
   const [series, setSeries] = useState<SeriesItem[]>([]);
   const [search, setSearch] = useState('');
@@ -59,6 +57,8 @@ const Series: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [loadingEpisodes, setLoadingEpisodes] = useState(false);
   const [seriesInfo, setSeriesInfo] = useState<any>(null);
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<'name' | 'year' | 'rating'>('name');
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -66,10 +66,12 @@ const Series: React.FC = () => {
     loadSeries();
   }, []);
 
+  const [filtered, setFiltered] = useState<SeriesItem[]>([]);
+
   const loadSeries = async () => {
     setLoading(true);
     try {
-      const playlists = await window.electronAPI.getPlaylists();
+      const playlists = await withTimeout(window.electronAPI.getPlaylists());
       if (playlists.length === 0) return;
 
       const xtreamPlaylist = playlists.find((p: any) => p.type === 'xtream');
@@ -81,12 +83,47 @@ const Series: React.FC = () => {
         });
       }
 
-      const list = await window.electronAPI.getSeries(playlists[0].id);
+      const list = await withTimeout(window.electronAPI.getSeries(playlists[0].id));
       setSeries(list);
-    } finally {
+    } catch { /* IPC timeout or failure */ } finally {
       setLoading(false);
     }
   };
+
+  const doSearch = useCallback(async () => {
+    const playlists = await window.electronAPI.getPlaylists();
+    if (playlists.length === 0) return;
+    const pid = playlists[0].id;
+    if (debouncedSearch || activeCategory !== 'All' || showFavoritesOnly) {
+      const result = await window.electronAPI.searchSeries({
+        playlistId: pid,
+        query: debouncedSearch || '',
+        category: activeCategory !== 'All' ? activeCategory : undefined,
+      });
+      let list = result || [];
+      if (showFavoritesOnly) list = list.filter((s: SeriesItem) => s.is_favorite === 1);
+      list.sort((a: SeriesItem, b: SeriesItem) => {
+        switch (sortBy) {
+          case 'year': return (b.year || 0) - (a.year || 0);
+          case 'rating': return (b.rating_5based || 0) - (a.rating_5based || 0);
+          default: return a.name.localeCompare(b.name);
+        }
+      });
+      setFiltered(list);
+    } else {
+      let list = [...series];
+      list.sort((a, b) => {
+        switch (sortBy) {
+          case 'year': return (b.year || 0) - (a.year || 0);
+          case 'rating': return (b.rating_5based || 0) - (a.rating_5based || 0);
+          default: return a.name.localeCompare(b.name);
+        }
+      });
+      setFiltered(list);
+    }
+  }, [debouncedSearch, activeCategory, showFavoritesOnly, sortBy, series]);
+
+  useEffect(() => { doSearch(); }, [doSearch]);
 
   const handleSync = async () => {
     if (!xtreamCfg) {
@@ -139,25 +176,15 @@ const Series: React.FC = () => {
     }
   };
 
-  const [filtered, setFiltered] = useState<SeriesItem[]>([]);
-
-  const doSearch = useCallback(async () => {
-    const playlists = await window.electronAPI.getPlaylists();
-    if (playlists.length === 0) return;
-    const pid = playlists[0].id;
-    if (debouncedSearch || activeCategory !== 'All') {
-      const result = await window.electronAPI.searchSeries({
-        playlistId: pid,
-        query: debouncedSearch || '',
-        category: activeCategory !== 'All' ? activeCategory : undefined,
-      });
-      setFiltered(result || []);
-    } else {
-      setFiltered(series);
-    }
-  }, [debouncedSearch, activeCategory, series]);
-
-  useEffect(() => { doSearch(); }, [doSearch]);
+  const toggleFavorite = async (s: SeriesItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const result = await window.electronAPI.toggleSeriesFavorite(s.id);
+    setSeries((prev) =>
+      prev.map((i) =>
+        i.id === s.id ? { ...i, is_favorite: result.isFavorite ? 1 : 0 } : i,
+      ),
+    );
+  };
 
   const categories = useMemo(() => {
     const counts: Record<string, number> = { All: series.length };
@@ -205,7 +232,7 @@ const Series: React.FC = () => {
           }}
           className="flex items-center gap-2 text-textSecondary hover:text-white mb-6 transition-colors"
         >
-          <ChevronLeft size={18} /> Back
+          <ChevronLeft size={18} /> Back to series
         </button>
 
         <div className="flex gap-6 mb-8">
@@ -213,14 +240,14 @@ const Series: React.FC = () => {
             <img
               src={selected.cover}
               alt={selected.name}
-              className="w-44 rounded-xl border border-white/5 shadow-lg"
+              className="w-44 rounded-xl border border-white/5 shadow-lg flex-shrink-0"
             />
           )}
           <div className="flex-1 min-w-0">
             <h1 className="text-3xl font-bold mb-2">{selected.name}</h1>
 
             <div className="flex items-center gap-3 flex-wrap mb-4">
-              {selected.year && (
+              {selected.year > 0 && (
                 <span className="text-sm text-text-secondary">{selected.year}</span>
               )}
               {selected.rating && (
@@ -276,7 +303,7 @@ const Series: React.FC = () => {
                     className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
                       activeSeason === season
                         ? 'bg-white text-black'
-                        : 'bg-bg-elevated border border-border-subtle text-text-secondary hover:text-white'
+                        : 'bg-bg-elevated border border-border-subtle text-textSecondary hover:text-white'
                     }`}
                   >
                     Season {season}
@@ -286,35 +313,41 @@ const Series: React.FC = () => {
             )}
 
             <div className="space-y-2">
-              {seasonEpisodes.map((ep) => (
-                <div
-                  key={ep.id}
-                  onClick={() => setPlaying(ep)}
-                  className="flex items-center gap-4 bg-bg-elevated border border-border-subtle rounded-xl p-4 cursor-pointer hover:bg-white/[0.04] hover:border-white/10 transition-all duration-150 group"
-                >
-                  <div className="w-8 h-8 rounded-lg bg-bg-elevated flex items-center justify-center group-hover:bg-white/10 transition-colors">
-                    {ep.is_watched ? (
-                      <Check size={16} className="text-state-success" />
-                    ) : (
-                      <Play size={16} className="text-white" />
+              {seasonEpisodes.length === 0 ? (
+                <p className="text-text-secondary text-sm py-8 text-center">
+                  No episodes in this season.
+                </p>
+              ) : (
+                seasonEpisodes.map((ep) => (
+                  <div
+                    key={ep.id}
+                    onClick={() => setPlaying(ep)}
+                    className="flex items-center gap-4 bg-bg-elevated border border-border-subtle rounded-xl p-4 cursor-pointer hover:bg-white/[0.04] hover:border-white/10 transition-all duration-150 group"
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-bg-elevated flex items-center justify-center group-hover:bg-white/10 transition-colors">
+                      {ep.is_watched ? (
+                        <Check size={16} className="text-state-success" />
+                      ) : (
+                        <Play size={16} className="text-white ml-0.5" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">
+                        <span className="text-textSecondary mr-2">E{ep.episode_num}</span>
+                        {ep.title}
+                      </p>
+                      {ep.plot && (
+                        <p className="text-xs text-textSecondary/70 truncate mt-0.5">{ep.plot}</p>
+                      )}
+                    </div>
+
+                    {ep.duration && (
+                      <span className="text-xs text-textSecondary flex-shrink-0">{ep.duration}</span>
                     )}
                   </div>
-
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">
-                      <span className="text-text-secondary mr-2">E{ep.episode_num}</span>
-                      {ep.title}
-                    </p>
-                    {ep.plot && (
-                      <p className="text-xs text-text-secondary/70 truncate mt-0.5">{ep.plot}</p>
-                    )}
-                  </div>
-
-                  {ep.duration && (
-                    <span className="text-xs text-text-secondary flex-shrink-0">{ep.duration}</span>
-                  )}
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </>
         )}
@@ -362,6 +395,27 @@ const Series: React.FC = () => {
             className="flex-1 max-w-xs"
           />
 
+          <button
+            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${
+              showFavoritesOnly
+                ? 'border-state-error/30 bg-state-error/10 text-state-error'
+                : 'border-border text-textSecondary hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Heart size={16} fill={showFavoritesOnly ? 'currentColor' : 'none'} />
+          </button>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="bg-bg-elevated border border-border-subtle rounded-xl px-3 py-2 text-sm text-white focus:outline-none"
+          >
+            <option value="name">Name</option>
+            <option value="year">Year</option>
+            <option value="rating">Rating</option>
+          </select>
+
           <div className="flex-1" />
 
           <button
@@ -407,6 +461,15 @@ const Series: React.FC = () => {
                         <Clapperboard size={28} />
                       </div>
                     )}
+
+                    <button onClick={(e) => toggleFavorite(s, e)}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Heart size={14} className={s.is_favorite ? 'text-state-error fill-state-error' : 'text-white'} />
+                    </button>
+
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                      <Play size={36} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" fill="currentColor" />
+                    </div>
 
                     {s.rating && (
                       <div className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded px-1.5 py-0.5">

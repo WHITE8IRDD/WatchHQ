@@ -44,7 +44,7 @@ const CategoryPanel: React.FC<CategoryPanelProps> = ({ category, channels, onClo
                   className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/5 cursor-pointer group transition-colors"
                 >
                   <span className="text-text-tertiary text-xs w-6 font-mono flex-shrink-0">{idx + 1}</span>
-                  <ChannelLogo name={ch.tvg_name} url={ch.tvg_logo} size={48} className="rounded-lg flex-shrink-0" />
+                  <ChannelLogo name={ch.tvg_name} logo={ch.tvg_logo} size={48} className="rounded-lg flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate group-hover:text-white">{ch.tvg_name}</p>
                     <p className="text-xs text-text-tertiary truncate">{ch.group_title}</p>

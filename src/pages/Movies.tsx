@@ -1,11 +1,9 @@
-// src/pages/Movies.tsx
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Film, Star, Heart, Play, X } from 'lucide-react';
 import { ArrowClockwise } from '@phosphor-icons/react';
 import SearchInput from '../components/common/SearchInput';
 import VirtualGrid from '../components/common/VirtualGrid';
 import CategorySidebar from '../components/common/CategorySidebar';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import { useDebounce } from '../hooks/useDebounce';
 import { toast } from '../components/common/Toast';
@@ -29,8 +27,16 @@ interface VodItem {
   is_favorite: number;
 }
 
+function withTimeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
+  ]);
+}
+
 const Movies: React.FC = () => {
   const [items, setItems] = useState<VodItem[]>([]);
+  const [filtered, setFiltered] = useState<VodItem[]>([]);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [selected, setSelected] = useState<VodItem | null>(null);
@@ -41,61 +47,67 @@ const Movies: React.FC = () => {
 
   const debouncedSearch = useDebounce(search, 300);
 
-  useEffect(() => {
-    loadMovies();
-  }, []);
-
-  const [filtered, setFiltered] = useState<VodItem[]>([]);
-
-  const doSearch = useCallback(async () => {
-    const playlists = await window.electronAPI.getPlaylists();
-    if (playlists.length === 0) return;
-    const pid = playlists[0].id;
-    if (debouncedSearch || activeCategory !== 'All' || showFavoritesOnly) {
-      const result = await window.electronAPI.searchVod({
-        playlistId: pid,
-        query: debouncedSearch || '',
-        category: activeCategory !== 'All' ? activeCategory : undefined,
-      });
-      let list = result || [];
-      if (showFavoritesOnly) list = list.filter((i: any) => i.is_favorite);
-      list.sort((a: any, b: any) => {
-        switch (sortBy) {
-          case 'year': return (b.year || 0) - (a.year || 0);
-          case 'rating': return (b.rating_5based || 0) - (a.rating_5based || 0);
-          default: return a.name.localeCompare(b.name);
-        }
-      });
-      setFiltered(list);
-    } else {
-      let list = [...items];
-      list.sort((a, b) => {
-        switch (sortBy) {
-          case 'year': return (b.year || 0) - (a.year || 0);
-          case 'rating': return (b.rating_5based || 0) - (a.rating_5based || 0);
-          default: return a.name.localeCompare(b.name);
-        }
-      });
-      setFiltered(list);
-    }
-  }, [debouncedSearch, activeCategory, showFavoritesOnly, sortBy, items]);
-
   const loadMovies = async () => {
     setLoading(true);
     try {
-      const playlists = await window.electronAPI.getPlaylists();
+      const playlists = await withTimeout(window.electronAPI.getPlaylists());
       if (playlists.length === 0) {
         setLoading(false);
         return;
       }
-      const vod = await window.electronAPI.getVod(playlists[0].id);
+      const vod = await withTimeout(window.electronAPI.getVod(playlists[0].id));
       setItems(vod);
+      setFiltered(vod);
+    } catch {
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => { doSearch(); }, [doSearch]);
+  useEffect(() => {
+    loadMovies();
+  }, []);
+
+  const applyFilters = useCallback(async () => {
+    const playlists = await window.electronAPI.getPlaylists();
+    if (playlists.length === 0) return;
+    const pid = playlists[0].id;
+
+    const needsSearch = debouncedSearch || activeCategory !== 'All';
+    let list: VodItem[];
+
+    if (needsSearch) {
+      const result = await window.electronAPI.searchVod({
+        playlistId: pid,
+        query: debouncedSearch || '',
+        category: activeCategory !== 'All' ? activeCategory : undefined,
+      });
+      list = result || [];
+    } else {
+      list = [...items];
+    }
+
+    if (showFavoritesOnly) {
+      list = list.filter((i) => i.is_favorite);
+    }
+
+    list.sort((a, b) => {
+      switch (sortBy) {
+        case 'year':
+          return (b.year || 0) - (a.year || 0);
+        case 'rating':
+          return (b.rating_5based || 0) - (a.rating_5based || 0);
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+
+    setFiltered(list);
+  }, [debouncedSearch, activeCategory, showFavoritesOnly, sortBy, items]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [applyFilters]);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -140,7 +152,9 @@ const Movies: React.FC = () => {
     e.stopPropagation();
     const result = await window.electronAPI.toggleVodFavorite(item.id);
     setItems((prev) =>
-      prev.map((i) => (i.id === item.id ? { ...i, is_favorite: result.isFavorite ? 1 : 0 } : i)),
+      prev.map((i) =>
+        i.id === item.id ? { ...i, is_favorite: result.isFavorite ? 1 : 0 } : i,
+      ),
     );
   };
 
@@ -240,13 +254,22 @@ const Movies: React.FC = () => {
                       </div>
                     )}
 
-                    <button onClick={(e) => toggleFavorite(item, e)}
-                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Heart size={14} className={item.is_favorite ? 'text-state-error fill-state-error' : 'text-white'} />
+                    <button
+                      onClick={(e) => toggleFavorite(item, e)}
+                      className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Heart
+                        size={14}
+                        className={item.is_favorite ? 'text-state-error fill-state-error' : 'text-white'}
+                      />
                     </button>
 
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                      <Play size={36} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" fill="currentColor" />
+                      <Play
+                        size={36}
+                        className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg"
+                        fill="currentColor"
+                      />
                     </div>
 
                     {item.rating && (
@@ -280,7 +303,10 @@ const MovieDetailModal: React.FC<{ movie: VodItem; onClose: () => void }> = ({
   if (playing) {
     return (
       <div className="fixed inset-0 z-[100] bg-black flex items-center justify-center" onClick={() => setPlaying(false)}>
-        <button className="absolute top-4 right-4 z-10 p-2 text-white/70 hover:text-white" onClick={() => setPlaying(false)}>
+        <button
+          className="absolute top-4 right-4 z-10 p-2 text-white/70 hover:text-white"
+          onClick={() => setPlaying(false)}
+        >
           <X size={24} />
         </button>
         <video

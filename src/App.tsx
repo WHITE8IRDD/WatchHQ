@@ -7,6 +7,7 @@ import LiveTV from './pages/LiveTV';
 import Movies from './pages/Movies';
 import Series from './pages/Series';
 import Favorites from './pages/Favorites';
+import History from './pages/History';
 import Playlists from './pages/Playlists';
 import Settings from './pages/Settings';
 import CommandPalette from './components/common/CommandPalette';
@@ -43,7 +44,7 @@ const App: React.FC = () => {
     <ErrorBoundary>
       <HashRouter>
         <div className="flex h-screen w-screen bg-bg-base text-text-primary overflow-hidden antialiased">
-          <Sidebar />
+          <Sidebar onOpenPalette={() => setShowCmdPalette(true)} />
           <div className="flex-1 ml-[60px] flex flex-col h-full min-w-0">
             <TopBar
               onOpenPalette={() => setShowCmdPalette(true)}
@@ -57,6 +58,7 @@ const App: React.FC = () => {
                 <Route path="/movies" element={<Movies />} />
                 <Route path="/series" element={<Series />} />
                 <Route path="/favorites" element={<Favorites />} />
+                <Route path="/history" element={<History />} />
                 <Route path="/playlists" element={<Playlists />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

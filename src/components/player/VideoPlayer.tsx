@@ -1,27 +1,38 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
-import { motion, AnimatePresence } from 'framer-motion';
 import { usePlaylistStore } from '../../store/playlistStore';
-import { useEpgNowNext } from '../../hooks/useEpg';
-import { useWatchHistory } from '../../hooks/useWatchHistory';
-import { toast } from '../common/Toast';
 import ChannelLogo from '../common/ChannelLogo';
-import {
-  Play, Pause, Volume2, VolumeX, Volume1,
-  Maximize, Minimize, PictureInPicture2,
-  SkipForward, SkipBack, Settings, X,
-  ExternalLink, Heart, Info, Loader, Tv,
-} from 'lucide-react';
+import { Play, Pause, SpeakerHigh, SpeakerX, ArrowsOut, ArrowsIn, PictureInPicture, GearSix, Heart, SkipBack, SkipForward, ArrowClockwise } from '@phosphor-icons/react';
 
-const log = import.meta.env.DEV ? console.log.bind(console) : () => {};
+const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
-function calcBuffered(video: HTMLVideoElement): number {
+function formatTime(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return '0:00';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function getBufferedRanges(video: HTMLVideoElement): { start: number; end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  try {
+    for (let i = 0; i < video.buffered.length; i++) {
+      ranges.push({ start: video.buffered.start(i), end: video.buffered.end(i) });
+    }
+  } catch {}
+  return ranges;
+}
+
+function getBufferHealth(video: HTMLVideoElement): number {
   try {
     const buf = video.buffered;
-    if (buf.length > 0) {
-      const ct = video.currentTime;
-      for (let i = 0; i < buf.length; i++) {
-        if (buf.start(i) <= ct && ct <= buf.end(i)) return buf.end(i) - ct;
+    if (buf.length === 0) return 0;
+    for (let i = 0; i < buf.length; i++) {
+      if (buf.start(i) <= video.currentTime && video.currentTime <= buf.end(i)) {
+        return buf.end(i) - video.currentTime;
       }
     }
   } catch {}
@@ -31,11 +42,15 @@ function calcBuffered(video: HTMLVideoElement): number {
 const VideoPlayer: React.FC = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
-  const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const fallbackAttemptedRef = useRef(false);
+  const firstFrameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const firstFrameRef = useRef(false);
+  const cancelledRef = useRef(false);
 
   const currentChannel = usePlaylistStore((s) => s.currentChannel);
   const channels = usePlaylistStore((s) => s.channels);
@@ -44,474 +59,891 @@ const VideoPlayer: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [bufferedEnd, setBufferedEnd] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPiP, setIsPiP] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showShortcuts, setShowShortcuts] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [videoStats, setVideoStats] = useState({ width: 0, height: 0, bitrate: 0, buffered: 0, droppedFrames: 0, bandwidth: 0 });
+  const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
-  const epg = useEpgNowNext(currentChannel?.tvg_id);
-  const { updatePosition } = useWatchHistory(
-    currentChannel
-      ? { item_type: 'channel', item_id: currentChannel.id, playlist_id: currentChannel.playlist_id, title: currentChannel.tvg_name, icon: currentChannel.tvg_logo, url: currentChannel.url }
-      : null,
-  );
+  const [stats, setStats] = useState({
+    width: 0,
+    height: 0,
+    bitrate: 0,
+    codec: '',
+    bufferHealth: 0,
+    droppedFrames: 0,
+    bandwidth: 0,
+  });
 
-  const supportedMse = mpegts.getFeatureList().mseLivePlayback;
+  const urlLower = (currentChannel?.url || '').toLowerCase();
+  const isVod = urlLower.endsWith('.mp4') || urlLower.endsWith('.mkv') || urlLower.endsWith('.webm');
+  const isLive = !isVod;
 
   const destroyEngines = useCallback(() => {
-    if (fallbackTimeoutRef.current) { clearTimeout(fallbackTimeoutRef.current); fallbackTimeoutRef.current = null; }
-    if (mpegtsRef.current) { try { mpegtsRef.current.destroy(); } catch {} mpegtsRef.current = null; }
+    if (hlsRef.current) {
+      try { hlsRef.current.destroy(); } catch {}
+      hlsRef.current = null;
+    }
+    if (mpegtsRef.current) {
+      try { mpegtsRef.current.destroy(); } catch {}
+      mpegtsRef.current = null;
+    }
+    if (firstFrameTimerRef.current) {
+      clearTimeout(firstFrameTimerRef.current);
+      firstFrameTimerRef.current = null;
+    }
+    firstFrameRef.current = false;
   }, []);
 
-  // ── Engine: load a URL with fallback ──
-  const loadStream = useCallback(async (urlToTry: string, isRetry: boolean, attemptFallback: () => void) => {
-    const video = videoRef.current;
-    if (!video) return;
+  const cancelPending = useCallback(() => {
+    cancelledRef.current = true;
+  }, []);
 
-    log('[PLAY] Loading:', urlToTry.substring(0, 100), 'retry:', isRetry);
-    log('[PLAY-DIAG] ═══════════════════');
-    log('[PLAY-DIAG] Channel:', currentChannel?.tvg_name);
-    log('[PLAY-DIAG] Primary URL:', currentChannel?.url);
-    log('[PLAY-DIAG] Fallback URL:', currentChannel?.url_fallback);
-    try { log('[PLAY-DIAG] Proxy port:', await window.electronAPI.getStreamProxyPort()); } catch {}
+  const detectEngine = useCallback((url: string): 'hls' | 'mpegts' | 'native' => {
+    const lower = url.toLowerCase();
+    if (lower.includes('.m3u8')) return 'hls';
+    if (lower.includes('.ts') || lower.includes('/live/')) return 'mpegts';
+    return 'native';
+  }, []);
 
-    setError(null);
-    setIsBuffering(true);
-    destroyEngines();
-
-    let cancelled = false;
-    let firstFrame = false;
-
-    // 8s timeout: if no frame, try alt URL first, then MPV
-    fallbackTimeoutRef.current = setTimeout(() => {
-      if (firstFrame || cancelled) return;
-      log('[PLAY] 8s timeout — no first frame');
-      if (!fallbackAttemptedRef.current) {
-        fallbackAttemptedRef.current = true;
-        const url = currentChannel!.url;
-        if (url.endsWith('.ts')) {
-          const alt = url.replace(/\.ts$/, '.m3u8');
-          log('[PLAY] Timeout: trying .m3u8 alt');
-          loadStream(alt, true, () => {
-            log('[PLAY] Alt also failed → MPV');
-            window.electronAPI.launchMPV(currentChannel!.url);
-            setError('Stream unsupported — playing in MPV');
-          });
-        } else if (url.endsWith('.m3u8')) {
-          const alt = url.replace(/\.m3u8$/, '.ts');
-          log('[PLAY] Timeout: trying .ts alt');
-          loadStream(alt, true, () => {
-            log('[PLAY] Alt also failed → MPV');
-            window.electronAPI.launchMPV(currentChannel!.url);
-            setError('Stream unsupported — playing in MPV');
-          });
-        } else {
-          log('[PLAY] Timeout: no alt format → MPV');
-          window.electronAPI.launchMPV(currentChannel!.url);
-          setError('Stream unsupported — playing in MPV');
-        }
+  const startFirstFrameTimer = useCallback((onTimeout: () => void) => {
+    if (firstFrameTimerRef.current) clearTimeout(firstFrameTimerRef.current);
+    firstFrameTimerRef.current = setTimeout(() => {
+      if (!firstFrameRef.current && !cancelledRef.current) {
+        onTimeout();
       }
     }, 8000);
+  }, []);
 
-    const markPlaying = () => {
-      if (firstFrame || cancelled) return;
-      firstFrame = true;
-      if (fallbackTimeoutRef.current) { clearTimeout(fallbackTimeoutRef.current); fallbackTimeoutRef.current = null; }
-      setIsBuffering(false);
-      log('[PLAY] First frame ✅');
-    };
-
-    video.addEventListener('playing', markPlaying, { once: true });
-    video.addEventListener('loadeddata', markPlaying, { once: true });
-
-    try {
-      const proxyPort = await window.electronAPI.getStreamProxyPort();
-      if (!proxyPort) { setError('Proxy not available'); return; }
-
-      const proxied = `http://127.0.0.1:${proxyPort}/${encodeURIComponent(urlToTry)}`;
-      const lower = urlToTry.toLowerCase();
-      const isHls = lower.includes('.m3u8');
-
-      if (isHls) {
-        log('[PLAY] Using native HLS (URL is .m3u8)');
-        video.src = proxied;
-        await video.play().catch(() => {});
-        return;
-      }
-
-      // MPEG-TS via mpegts.js
-      if (!supportedMse) {
-        log('[PLAY] MSE not supported, native fallback');
-        video.src = proxied;
-        await video.play().catch(() => {});
-        return;
-      }
-
-      const player = mpegts.createPlayer(
-        { type: 'mpegts', isLive: true, url: proxied, cors: true },
-        { enableWorker: true, enableStashBuffer: true, stashInitialSize: 384, liveBufferLatencyChasing: false, autoCleanupSourceBuffer: true, fixAudioTimestampGap: true, reuseRedirectedURL: true },
-      );
-
-      player.on(mpegts.Events.ERROR, (type: string, detail: string, info: any) => {
-        log('[PLAY-MSE-ERR]', type, detail);
-        if (!firstFrame && !cancelled) {
-          log('[PLAY] Error before first frame, attempting fallback');
-          attemptFallback();
-        }
-      });
-
-      player.on(mpegts.Events.MEDIA_INFO, (info: any) => {
-        log('[PLAY-MSE-INFO]', info);
-        const codec = (info?.videoCodec || '').toLowerCase();
-        log('[PLAY] Detected codec:', codec);
-        if (/^hev1|^hvc1|^hevc$/i.test(codec)) {
-          log('[PLAY] HEVC on MEDIA_INFO → MPV');
-          try { player.destroy(); } catch {}
-          window.electronAPI.launchMPV(currentChannel!.url);
-          setError('HEVC codec — playing in MPV');
-        }
-      });
-
-      player.attachMediaElement(video);
-      player.load();
-      mpegtsRef.current = player;
-      setTimeout(() => { if (!cancelled) try { player.play(); } catch {} }, 100);
-    } catch (err: any) {
-      log('[PLAY-SETUP-ERR]', err.message);
-      if (!cancelled) { clearTimeout(fallbackTimeoutRef.current!); setError(err.message); }
+  const markFirstFrame = useCallback(() => {
+    if (firstFrameRef.current || cancelledRef.current) return;
+    firstFrameRef.current = true;
+    if (firstFrameTimerRef.current) {
+      clearTimeout(firstFrameTimerRef.current);
+      firstFrameTimerRef.current = null;
     }
+    setIsBuffering(false);
+    setError(null);
+  }, []);
 
-    return () => { cancelled = true; };
-  }, [currentChannel, destroyEngines, supportedMse]);
-
-  // ── Playback effect ──
-  useEffect(() => {
+  const initPlayback = useCallback(async () => {
     const video = videoRef.current;
     if (!video || !currentChannel) return;
 
-    log('[PLAY] Channel:', currentChannel.tvg_name);
+    // Check player preference (P7)
+    try {
+      if ((window as any).electronAPI?.getPreferences) {
+        const prefs = await (window as any).electronAPI.getPreferences();
+        const engine = prefs?.player_type || 'internal';
+        if (engine === 'mpv') {
+          await (window as any).electronAPI.launchMPV?.(currentChannel.url);
+          setError('Playing in MPV');
+          setIsBuffering(false);
+          return;
+        }
+        if (engine === 'vlc') {
+          await (window as any).electronAPI.launchVLC?.(currentChannel.url);
+          setError('Playing in VLC');
+          setIsBuffering(false);
+          return;
+        }
+      }
+    } catch {}
+
+    cancelledRef.current = false;
     setError(null);
     setIsBuffering(true);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setBufferedEnd(0);
+
     destroyEngines();
 
-    let cancelled = false;
-    fallbackAttemptedRef.current = false;
+    const url = currentChannel.url;
+    const engine = detectEngine(url);
 
-    const tryFallback = () => {
-      if (cancelled || fallbackAttemptedRef.current) return;
-      fallbackAttemptedRef.current = true;
-      const url = currentChannel.url;
-      const urlFallback = (currentChannel as any).url_fallback;
+    const handleFirstFrame = () => markFirstFrame();
+    video.addEventListener('playing', handleFirstFrame, { once: true });
+    video.addEventListener('loadeddata', handleFirstFrame, { once: true });
 
-      if (urlFallback) {
-        log('[PLAY] Fallback to url_fallback:', urlFallback.substring(0, 80));
-        loadStream(urlFallback, true, () => {
-          log('[PLAY] Both URLs failed → MPV');
-          window.electronAPI.launchMPV(currentChannel.url);
-          setError('Stream unsupported — playing in MPV');
-        });
-      } else if (url.endsWith('.ts')) {
-        const alt = url.replace(/\.ts$/, '.m3u8');
-        log('[PLAY] Fallback .ts→.m3u8:', alt.substring(0, 80));
-        if (!fallbackAttemptedRef.current) {
-          fallbackAttemptedRef.current = true;
-          loadStream(alt, true, () => {
-            log('[PLAY] Both formats failed → MPV');
-            window.electronAPI.launchMPV(currentChannel.url);
-            setError('Stream unsupported — playing in MPV');
-          });
+    let streamUrl = url;
+    try {
+      if ((window as any).electronAPI?.getStreamProxyPort) {
+        const proxyPort = await (window as any).electronAPI.getStreamProxyPort();
+        if (proxyPort) {
+          streamUrl = `http://127.0.0.1:${proxyPort}/${encodeURIComponent(url)}`;
         }
-      } else if (url.endsWith('.m3u8')) {
-        const alt = url.replace(/\.m3u8$/, '.ts');
-        log('[PLAY] Fallback .m3u8→.ts:', alt.substring(0, 80));
-        if (!fallbackAttemptedRef.current) {
-          fallbackAttemptedRef.current = true;
-          loadStream(alt, true, () => {
-            log('[PLAY] Both formats failed → MPV');
-            window.electronAPI.launchMPV(currentChannel.url);
-            setError('Stream unsupported — playing in MPV');
+      }
+    } catch {}
+
+    startFirstFrameTimer(() => {
+      if (cancelledRef.current) return;
+      setError('Playback failed');
+      setIsBuffering(false);
+      destroyEngines();
+    });
+
+    try {
+      if (engine === 'hls') {
+        if (Hls.isSupported()) {
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: false,
+            maxBufferLength: 60,
+            maxMaxBufferLength: 600,
+            maxBufferSize: 120 * 1000 * 1000,
+            maxBufferHole: 0.5,
+            backBufferLength: 90,
+            liveSyncDurationCount: 5,
+            liveMaxLatencyDurationCount: 15,
+            liveDurationInfinity: true,
+            startLevel: -1,
+            capLevelToPlayerSize: false,
+            abrEwmaDefaultEstimate: 10000000,
+            abrBandWidthFactor: 0.95,
+            abrBandWidthUpFactor: 0.7,
+            manifestLoadingTimeOut: 20000,
+            manifestLoadingMaxRetry: 8,
+            manifestLoadingRetryDelay: 500,
+            levelLoadingTimeOut: 20000,
+            levelLoadingMaxRetry: 8,
+            fragLoadingTimeOut: 30000,
+            fragLoadingMaxRetry: 10,
+            fragLoadingRetryDelay: 500,
           });
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            if (data.fatal) {
+              if (!cancelledRef.current) {
+                setError('Playback failed');
+                setIsBuffering(false);
+                destroyEngines();
+              }
+            }
+          });
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            video.play().catch(() => {});
+          });
+          hls.loadSource(streamUrl);
+          hls.attachMedia(video);
+          hlsRef.current = hls;
+        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = streamUrl;
+          video.play().catch(() => {});
+        } else {
+          setError('HLS not supported in this browser');
+          setIsBuffering(false);
+        }
+      } else if (engine === 'mpegts') {
+        if (mpegts.getFeatureList().mseLivePlayback) {
+          const player = mpegts.createPlayer(
+            { type: 'mpegts', isLive: true, url: streamUrl, cors: true },
+            {
+              enableWorker: true,
+              enableStashBuffer: true,
+              stashInitialSize: 1024 * 1024,
+              autoCleanupSourceBuffer: true,
+              autoCleanupMaxBackwardDuration: 60,
+              autoCleanupMinBackwardDuration: 30,
+              fixAudioTimestampGap: true,
+              reuseRedirectedURL: true,
+              liveBufferLatencyChasing: false,
+              liveBufferLatencyMaxLatency: 30,
+              liveBufferLatencyMinRemain: 5,
+              lazyLoad: false,
+              deferLoadAfterSourceOpen: false,
+              seekType: 'range',
+            },
+          );
+          player.on(mpegts.Events.ERROR, () => {
+            if (!cancelledRef.current && !firstFrameRef.current) {
+              setError('Playback failed');
+              setIsBuffering(false);
+              destroyEngines();
+            }
+          });
+          player.attachMediaElement(video);
+          player.load();
+          player.play();
+          mpegtsRef.current = player;
+        } else {
+          video.src = streamUrl;
+          video.play().catch(() => {});
         }
       } else {
-        log('[PLAY] No fallback available → MPV');
-        window.electronAPI.launchMPV(currentChannel.url);
-        setError('Stream unsupported — playing in MPV');
+        video.src = streamUrl;
+        video.play().catch(() => {});
+      }
+    } catch (err: any) {
+      if (!cancelledRef.current) {
+        setError(err.message || 'Playback failed');
+        setIsBuffering(false);
+      }
+    }
+
+    // Check favorite status
+    try {
+      if ((window as any).electronAPI?.checkFavorite) {
+        const res = await (window as any).electronAPI.checkFavorite({
+          item_type: 'channel',
+          item_id: currentChannel.id,
+        });
+        setIsFavorite(res.isFavorite);
+      }
+    } catch {}
+  }, [currentChannel, destroyEngines, detectEngine, startFirstFrameTimer, markFirstFrame]);
+
+  useEffect(() => {
+    if (!currentChannel) return;
+    initPlayback();
+    return () => {
+      cancelledRef.current = true;
+      destroyEngines();
+      const video = videoRef.current;
+      if (video) {
+        try { video.removeAttribute('src'); video.load(); } catch {}
+      }
+    };
+  }, [currentChannel, initPlayback, destroyEngines]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+    const onWaiting = () => setIsBuffering(true);
+    const onPlaying = () => { setIsBuffering(false); markFirstFrame(); };
+    const onCanPlay = () => setIsBuffering(false);
+    const onTimeUpdate = () => {
+      setCurrentTime(video.currentTime);
+      setDuration(video.duration);
+    };
+    const onProgress = () => {
+      const ranges = getBufferedRanges(video);
+      if (ranges.length > 0) {
+        for (const r of ranges) {
+          if (r.start <= video.currentTime && video.currentTime <= r.end) {
+            setBufferedEnd(r.end);
+            break;
+          }
+        }
+      }
+    };
+    const onVolumeChange = () => {
+      setVolume(video.volume);
+      setIsMuted(video.muted);
+    };
+    const onError = () => {
+      if (!cancelledRef.current) {
+        setError('Playback failed');
+        setIsBuffering(false);
       }
     };
 
-    loadStream(currentChannel.url, false, tryFallback);
-
-    window.electronAPI.checkFavorite({ item_type: 'channel', item_id: currentChannel.id })
-      .then((res) => setIsFavorite(res.isFavorite)).catch(() => {});
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onPause);
+    video.addEventListener('waiting', onWaiting);
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('canplay', onCanPlay);
+    video.addEventListener('timeupdate', onTimeUpdate);
+    video.addEventListener('progress', onProgress);
+    video.addEventListener('volumechange', onVolumeChange);
+    video.addEventListener('error', onError);
 
     return () => {
-      cancelled = true;
-      destroyEngines();
-      try { video.removeAttribute('src'); video.load(); } catch {}
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onPause);
+      video.removeEventListener('waiting', onWaiting);
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('canplay', onCanPlay);
+      video.removeEventListener('timeupdate', onTimeUpdate);
+      video.removeEventListener('progress', onProgress);
+      video.removeEventListener('volumechange', onVolumeChange);
+      video.removeEventListener('error', onError);
     };
-  }, [currentChannel, destroyEngines, loadStream]);
+  }, [markFirstFrame]);
 
-  // ── Stats interval ──
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handler);
+    return () => document.removeEventListener('fullscreenchange', handler);
+  }, []);
+
+  useEffect(() => {
+    const onEnter = () => setIsPiP(true);
+    const onLeave = () => setIsPiP(false);
+    document.addEventListener('enterpictureinpicture', onEnter);
+    document.addEventListener('leavepictureinpicture', onLeave);
+    return () => {
+      document.removeEventListener('enterpictureinpicture', onEnter);
+      document.removeEventListener('leavepictureinpicture', onLeave);
+    };
+  }, []);
+
   useEffect(() => {
     if (!showStats || !videoRef.current) return;
     const iv = setInterval(() => {
       const v = videoRef.current;
       if (!v) return;
       const q = v.getVideoPlaybackQuality?.();
-      setVideoStats(prev => ({ ...prev, width: v.videoWidth || prev.width, height: v.videoHeight || prev.height, buffered: calcBuffered(v), droppedFrames: q?.droppedVideoFrames || 0 }));
+      let bandwidth = 0;
+      let bitrate = 0;
+      let codec = '';
+      if (hlsRef.current) {
+        const hls = hlsRef.current;
+        const levels = hls.levels;
+        const level = hls.currentLevel;
+        if (level >= 0 && levels[level]) {
+          bitrate = levels[level].bitrate;
+          codec = levels[level].videoCodec || '';
+          bandwidth = hls.bandwidthEstimate;
+        }
+      }
+      setStats({
+        width: v.videoWidth || stats.width,
+        height: v.videoHeight || stats.height,
+        bitrate,
+        codec,
+        bufferHealth: getBufferHealth(v),
+        droppedFrames: q?.droppedVideoFrames || 0,
+        bandwidth,
+      });
     }, 1000);
     return () => clearInterval(iv);
-  }, [showStats]);
-
-  // ── Video events ──
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onWaiting = () => setIsBuffering(true);
-    const onPlaying = () => setIsBuffering(false);
-    const onCanPlay = () => setIsBuffering(false);
-    const onError = () => { if (!error) setError('Failed to play stream'); };
-    const onTimeUpdate = () => updatePosition(v.currentTime, v.duration || 0);
-    const onVol = () => { setVolume(v.volume); setIsMuted(v.muted); };
-
-    v.addEventListener('play', onPlay);
-    v.addEventListener('pause', onPause);
-    v.addEventListener('waiting', onWaiting);
-    v.addEventListener('playing', onPlaying);
-    v.addEventListener('canplay', onCanPlay);
-    v.addEventListener('error', onError);
-    v.addEventListener('timeupdate', onTimeUpdate);
-    v.addEventListener('volumechange', onVol);
-    return () => {
-      v.removeEventListener('play', onPlay); v.removeEventListener('pause', onPause);
-      v.removeEventListener('waiting', onWaiting); v.removeEventListener('playing', onPlaying);
-      v.removeEventListener('canplay', onCanPlay); v.removeEventListener('error', onError);
-      v.removeEventListener('timeupdate', onTimeUpdate); v.removeEventListener('volumechange', onVol);
-    };
-  }, [updatePosition, error]);
-
-  // ── Fullscreen ──
-  useEffect(() => {
-    const f = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', f);
-    return () => document.removeEventListener('fullscreenchange', f);
-  }, []);
-
-  // ── Media keys ──
-  useEffect(() => {
-    const c1 = window.electronAPI.onMediaPlayPause(() => togglePlay());
-    const c2 = window.electronAPI.onMediaStop(() => { if (videoRef.current) { videoRef.current.pause(); videoRef.current.currentTime = 0; } });
-    return () => { c1(); c2(); };
-  }, []);
+  }, [showStats, stats.width, stats.height]);
 
   const showControlsTemporarily = useCallback(() => {
     setControlsVisible(true);
+    setShowSpeedMenu(false);
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = setTimeout(() => { if (isPlaying && !showSettings) setControlsVisible(false); }, 3000);
-  }, [isPlaying, showSettings]);
+    if (isPlaying && !showStats) {
+      hideTimerRef.current = setTimeout(() => {
+        setControlsVisible(false);
+      }, 3000);
+    }
+  }, [isPlaying, showStats]);
 
-  const togglePlay = () => { const v = videoRef.current; v?.paused ? v.play().catch(() => {}) : v?.pause(); };
-  const toggleMute = () => { const v = videoRef.current; if (v) v.muted = !v.muted; };
-  const changeVolume = (d: number) => { const v = videoRef.current; if (v) v.volume = Math.max(0, Math.min(1, v.volume + d)); };
-  const toggleFullscreen = () => { const c = containerRef.current; if (!c) return; document.fullscreenElement ? document.exitFullscreen() : c.requestFullscreen(); };
-  const togglePiP = async () => { const v = videoRef.current; if (!v) return; try { document.pictureInPictureElement ? await document.exitPictureInPicture() : await v.requestPictureInPicture(); } catch {} };
-  const navigateChannel = (dir: number) => {
+  const keepControlsVisible = useCallback(() => {
+    setControlsVisible(true);
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+  }, []);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (v.paused) {
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const v = videoRef.current;
+    if (v) v.muted = !v.muted;
+  }, []);
+
+  const changeVolume = useCallback((delta: number) => {
+    const v = videoRef.current;
+    if (v) {
+      v.volume = Math.max(0, Math.min(1, v.volume + delta));
+    }
+  }, []);
+
+  const handleVolumeSlider = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = videoRef.current;
+    if (v) {
+      const val = parseFloat(e.target.value) / 100;
+      v.volume = val;
+      v.muted = val === 0;
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const c = containerRef.current;
+    if (!c) return;
+    document.fullscreenElement ? document.exitFullscreen() : c.requestFullscreen();
+  }, []);
+
+  const togglePiP = useCallback(async () => {
+    const v = videoRef.current;
+    if (!v) return;
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else {
+        await v.requestPictureInPicture();
+      }
+    } catch {}
+  }, []);
+
+  const navigateChannel = useCallback((dir: number) => {
     if (!currentChannel || channels.length === 0) return;
-    const idx = channels.findIndex(c => c.id === currentChannel.id);
+    const idx = channels.findIndex((c) => c.id === currentChannel.id);
     if (idx === -1) return;
-    setCurrentChannel(channels[(idx + dir + channels.length) % channels.length]);
-  };
+    const next = channels[(idx + dir + channels.length) % channels.length];
+    setCurrentChannel(next);
+  }, [currentChannel, channels, setCurrentChannel]);
 
-  const openInMPV = async () => {
+  const seek = useCallback((time: number) => {
+    const v = videoRef.current;
+    if (v && isVod) v.currentTime = Math.max(0, Math.min(time, v.duration || 0));
+  }, [isVod]);
+
+  const handleProgressClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isVod || !progressRef.current) return;
+    const rect = progressRef.current.getBoundingClientRect();
+    const fraction = (e.clientX - rect.left) / rect.width;
+    const v = videoRef.current;
+    if (v) v.currentTime = fraction * (v.duration || 0);
+  }, [isVod]);
+
+  const changeSpeed = useCallback((speed: number) => {
+    const v = videoRef.current;
+    if (v) {
+      v.playbackRate = speed;
+      setPlaybackSpeed(speed);
+    }
+    setShowSpeedMenu(false);
+  }, []);
+
+  const toggleFavorite = useCallback(async () => {
     if (!currentChannel) return;
     try {
-      const r = await window.electronAPI.launchMPV(currentChannel.url, { fullscreen: true });
-      if (!r.success) toast.error(r.error || 'Failed to launch MPV');
-    } catch (err: any) { toast.error(err.message); }
-  };
+      if ((window as any).electronAPI?.toggleFavorite) {
+        const res = await (window as any).electronAPI.toggleFavorite({
+          item_type: 'channel',
+          item_id: currentChannel.id,
+          playlist_id: currentChannel.playlist_id,
+        });
+        setIsFavorite(res.isFavorite);
+      }
+    } catch {}
+  }, [currentChannel]);
 
-  const toggleFavoriteChannel = async () => {
+  const openInMPV = useCallback(async () => {
     if (!currentChannel) return;
     try {
-      const r = await window.electronAPI.toggleFavorite({ item_type: 'channel', item_id: currentChannel.id, playlist_id: currentChannel.playlist_id });
-      setIsFavorite(r.isFavorite);
-      if (r.isFavorite) toast.success('Added to favorites');
-    } catch (err: any) { toast.error(err.message); }
-  };
+      await (window as any).electronAPI?.launchMPV?.(currentChannel.url);
+    } catch {}
+  }, [currentChannel]);
 
-  // ── Keyboard shortcuts ──
+  const retry = useCallback(() => {
+    if (currentChannel) {
+      cancelledRef.current = false;
+      initPlayback();
+    }
+  }, [currentChannel, initPlayback]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!currentChannel) return;
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
+
       switch (e.key) {
-        case ' ': case 'k': e.preventDefault(); togglePlay(); break;
-        case 'm': toggleMute(); break;
-        case 'f': toggleFullscreen(); break;
-        case 'p': togglePiP(); break;
-        case 'i': e.preventDefault(); setShowStats(s => !s); break;
-        case '?': setShowShortcuts(v => !v); break;
-        case 'ArrowRight': e.preventDefault(); navigateChannel(1); break;
-        case 'ArrowLeft': e.preventDefault(); navigateChannel(-1); break;
-        case 'ArrowUp': e.preventDefault(); changeVolume(0.05); break;
-        case 'ArrowDown': e.preventDefault(); changeVolume(-0.05); break;
-        case 'Escape': if (isFullscreen) document.exitFullscreen(); break;
+        case ' ':
+        case 'k':
+        case 'K':
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'm':
+        case 'M':
+          e.preventDefault();
+          toggleMute();
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          changeVolume(0.1);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          changeVolume(-0.1);
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (isVod) seek((videoRef.current?.currentTime || 0) - 10);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (isVod) seek((videoRef.current?.currentTime || 0) + 10);
+          break;
+        case 'p':
+        case 'P':
+          e.preventDefault();
+          togglePiP();
+          break;
+        case 'Escape':
+          if (isFullscreen) document.exitFullscreen();
+          break;
       }
     };
+
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [currentChannel, isFullscreen]);
+  }, [currentChannel, togglePlay, toggleFullscreen, toggleMute, changeVolume, togglePiP, isFullscreen, isVod, seek]);
 
-  const handleVideoClick = () => {
-    if (clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current); clickTimerRef.current = null;
-      toggleFullscreen();
-    } else {
-      clickTimerRef.current = setTimeout(() => { togglePlay(); clickTimerRef.current = null; }, 200);
-    }
-  };
+  // Stall recovery (P1)
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !currentChannel) return;
+
+    let lastTime = 0;
+    let stallCount = 0;
+    const checker = setInterval(() => {
+      if (video.paused || video.readyState < 3) return;
+      if (video.currentTime === lastTime) {
+        stallCount++;
+        if (stallCount >= 3) {
+          stallCount = 0;
+          if (hlsRef.current) {
+            try { hlsRef.current.startLoad(-1); } catch {}
+          }
+          if (mpegtsRef.current) {
+            try {
+              mpegtsRef.current.unload();
+              mpegtsRef.current.load();
+              mpegtsRef.current.play();
+            } catch {}
+          }
+        }
+      } else {
+        stallCount = 0;
+        lastTime = video.currentTime;
+      }
+    }, 2000);
+
+    return () => clearInterval(checker);
+  }, [currentChannel]);
 
   if (!currentChannel) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center bg-black text-text-tertiary rounded-2xl">
-        <Tv size={48} className="mb-3 opacity-40" />
+        <svg className="w-12 h-12 mb-3 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
+          <polyline points="16 21 16 2 8 2 8 21" />
+        </svg>
         <p className="text-sm">Select a channel to start watching</p>
       </div>
     );
   }
 
-  const VolumeIcon = isMuted || volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+  const VolumeIcon = isMuted || volume === 0 ? SpeakerX : SpeakerHigh;
+  const FullscreenIcon = isFullscreen ? ArrowsIn : ArrowsOut;
 
   return (
-    <div ref={containerRef}
-      className="relative w-full h-full bg-black overflow-hidden group rounded-2xl"
+    <div
+      ref={containerRef}
+      className="relative w-full h-full bg-black overflow-hidden select-none rounded-2xl"
       onMouseMove={showControlsTemporarily}
-      onMouseLeave={() => isPlaying && !showSettings && setControlsVisible(false)}
+      onMouseLeave={() => {
+        if (isPlaying && !showStats) setControlsVisible(false);
+      }}
     >
-      <AnimatePresence mode="wait">
-        <motion.div key={currentChannel.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="absolute inset-0">
-          <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain bg-black cursor-pointer" playsInline onClick={handleVideoClick} onDoubleClick={toggleFullscreen} />
-        </motion.div>
-      </AnimatePresence>
+      <video
+        ref={videoRef}
+        className="absolute inset-0 w-full h-full object-contain bg-black cursor-pointer"
+        playsInline
+        onClick={togglePlay}
+        onDoubleClick={toggleFullscreen}
+      />
 
-      <AnimatePresence>{isBuffering && !error && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-          <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center"><Loader size={28} className="text-white animate-spin" /></div>
-        </motion.div>
-      )}</AnimatePresence>
-
-      <AnimatePresence>{!isPlaying && !isBuffering && !error && (
-        <motion.button initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
-          onClick={togglePlay} className="absolute inset-0 m-auto w-20 h-20 rounded-full bg-white/95 flex items-center justify-center z-10 shadow-2xl">
-          <Play size={36} className="text-black ml-1.5" fill="currentColor" />
-        </motion.button>
-      )}</AnimatePresence>
-
-      <AnimatePresence>{error && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 gap-4 p-8 text-center">
-          <div className="w-14 h-14 rounded-full bg-state-error/20 flex items-center justify-center"><X size={28} className="text-state-error" /></div>
-          <p className="text-state-error text-sm font-medium">{error}</p>
-          <div className="flex gap-2">
-            <button onClick={() => { setError(null); destroyEngines(); videoRef.current?.load(); }} className="px-4 py-2 bg-white text-black rounded-lg text-sm font-medium">Retry</button>
-            <button onClick={openInMPV} className="px-4 py-2 border border-white/20 rounded-lg text-sm">Open in MPV</button>
+      {/* Buffering spinner */}
+      {isBuffering && !error && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div className="w-14 h-14 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center">
+            <div className="w-7 h-7 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           </div>
-        </motion.div>
-      )}</AnimatePresence>
+        </div>
+      )}
 
-      {/* Top info */}
-      <AnimatePresence>{controlsVisible && !error && (
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.2 }}
-          className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent pt-4 pb-16 px-6 z-10">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-white/5"><ChannelLogo name={currentChannel.tvg_name} logo={currentChannel.tvg_logo} size={48} /></div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="flex items-center gap-1.5 px-2 py-0.5 bg-state-error rounded text-white text-[10px] font-bold uppercase tracking-wider leading-none"><span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />Live</span>
-                <h2 className="text-white font-semibold text-lg truncate">{currentChannel.tvg_name}</h2>
-              </div>
-              {epg?.now && <p className="text-white/70 text-sm truncate">Now: {epg.now.title}{epg.next && <> · Next: {epg.next.title}</>}</p>}
-            </div>
-            <button onClick={toggleFavoriteChannel} className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isFavorite ? 'bg-state-error/20 text-state-error' : 'bg-black/40 text-white/70 hover:bg-black/60'}`}>
-              <Heart size={18} fill={isFavorite ? 'currentColor' : 'none'} />
+      {/* Center play button (paused, not buffering, no error) */}
+      {!isPlaying && !isBuffering && !error && (
+        <button
+          onClick={togglePlay}
+          className="absolute inset-0 m-auto w-20 h-20 rounded-full bg-white flex items-center justify-center z-10 shadow-2xl hover:scale-105 transition-transform"
+        >
+          <Play size={32} className="text-black ml-1" weight="fill" />
+        </button>
+      )}
+
+      {/* Error overlay */}
+      {error && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 gap-5 p-8 text-center">
+          <div className="w-14 h-14 rounded-full bg-state-error/20 flex items-center justify-center">
+            <span className="text-state-error text-2xl font-bold">!</span>
+          </div>
+          <p className="text-white text-base font-medium">Playback failed</p>
+          <p className="text-text-secondary text-sm -mt-3">{error}</p>
+          <div className="flex gap-3">
+            <button
+              onClick={retry}
+              className="flex items-center gap-2 px-5 py-2.5 bg-white text-black rounded-lg text-sm font-medium hover:bg-white/90 transition-colors"
+            >
+              <ArrowClockwise size={16} weight="bold" />
+              Retry
+            </button>
+            <button
+              onClick={openInMPV}
+              className="px-5 py-2.5 border border-white/20 text-white rounded-lg text-sm font-medium hover:bg-white/10 transition-colors"
+            >
+              Open in MPV
             </button>
           </div>
-        </motion.div>
-      )}</AnimatePresence>
+        </div>
+      )}
+
+      {/* Top bar */}
+      <div
+        className={`absolute top-0 left-0 right-0 z-10 transition-opacity duration-300 ${
+          controlsVisible && !error ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="bg-gradient-to-b from-black/70 via-black/40 to-transparent pt-4 pb-16 px-5">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl overflow-hidden flex-shrink-0 bg-white/5">
+              <ChannelLogo name={currentChannel.tvg_name} logo={currentChannel.tvg_logo} size={44} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                {isLive && (
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 bg-state-error rounded text-white text-[10px] font-bold uppercase tracking-wider leading-none">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                    Live
+                  </span>
+                )}
+                <h2 className="text-white font-semibold text-base truncate">{currentChannel.tvg_name}</h2>
+              </div>
+            </div>
+            <button
+              onClick={toggleFavorite}
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors flex-shrink-0 ${
+                isFavorite
+                  ? 'bg-state-error/20 text-state-error'
+                  : 'bg-black/40 text-white/60 hover:bg-black/60 hover:text-white'
+              }`}
+            >
+              <Heart size={16} weight={isFavorite ? 'fill' : 'regular'} />
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Bottom controls */}
-      <AnimatePresence>{controlsVisible && !error && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} transition={{ duration: 0.2 }}
-          className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent pt-16 pb-4 px-6 z-10">
-          {epg?.now && (
-            <div className="w-full h-0.5 bg-white/20 rounded-full mb-4 overflow-hidden">
-              <motion.div className="h-full bg-white" style={{ width: `${epg.progress}%` }} transition={{ duration: 1 }} />
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <button onClick={togglePlay} className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform flex-shrink-0">
-              {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" className="ml-0.5" />}
-            </button>
-            <button onClick={() => navigateChannel(-1)} className="w-10 h-10 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0" title="Previous (←)"><SkipBack size={20} /></button>
-            <button onClick={() => navigateChannel(1)} className="w-10 h-10 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0" title="Next (→)"><SkipForward size={20} /></button>
-            <div className="flex items-center gap-2 ml-2 group/vol">
-              <button onClick={toggleMute} className="w-10 h-10 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0"><VolumeIcon size={20} /></button>
-              <div className="w-0 overflow-hidden transition-all duration-200 group-hover/vol:w-24">
-                <input type="range" min={0} max={1} step={0.01} value={isMuted ? 0 : volume}
-                  onChange={(e) => { const v = videoRef.current; if (v) { v.volume = +e.target.value; v.muted = +e.target.value === 0; } }}
-                  className="w-24 accent-white cursor-pointer h-1" />
+      <div
+        ref={controlsRef}
+        onMouseEnter={keepControlsVisible}
+        className={`absolute bottom-0 left-0 right-0 z-10 transition-opacity duration-300 ${
+          controlsVisible && !error ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="bg-gradient-to-t from-black/70 via-black/40 to-transparent pt-16 pb-3 px-5">
+          {/* Progress bar (VOD only) */}
+          {isVod && (
+            <div
+              ref={progressRef}
+              className="w-full h-1 bg-white/20 rounded-full mb-3 cursor-pointer group/progress hover:h-1.5 transition-all"
+              onClick={handleProgressClick}
+            >
+              <div className="relative h-full w-full">
+                <div
+                  className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
+                  style={{ width: `${duration > 0 ? (bufferedEnd / duration) * 100 : 0}%` }}
+                />
+                <div
+                  className="absolute inset-y-0 left-0 bg-white rounded-full"
+                  style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                />
               </div>
             </div>
-            <div className="flex-1" />
-            {showStats && <div className="text-[10px] font-mono text-white/50 mr-2 leading-tight text-right"><div>{videoStats.width}×{videoStats.height}</div><div>{videoStats.bitrate ? (videoStats.bitrate / 1000).toFixed(0) + 'k' : '—'}</div></div>}
-            <button onClick={() => setShowStats(s => !s)} className="w-10 h-10 rounded-full text-white/50 hover:bg-white/10 flex items-center justify-center flex-shrink-0" title="Stats (I)"><Info size={16} /></button>
-            <button onClick={togglePiP} className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${isPiP ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10'}`} title="PiP (P)"><PictureInPicture2 size={18} /></button>
-            <button onClick={openInMPV} className="w-10 h-10 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0" title="Open in MPV"><ExternalLink size={18} /></button>
-            <button onClick={() => setShowSettings(v => !v)} className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${showSettings ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10'}`} title="Settings"><Settings size={18} /></button>
-            <button onClick={toggleFullscreen} className="w-10 h-10 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0" title="Fullscreen (F)">{isFullscreen ? <Minimize size={18} /> : <Maximize size={18} />}</button>
-          </div>
-        </motion.div>
-      )}</AnimatePresence>
+          )}
 
-      <AnimatePresence>{showSettings && (
-        <motion.div initial={{ opacity: 0, y: 10, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 10, scale: 0.95 }}
-          className="absolute bottom-24 right-6 w-64 bg-black/95 backdrop-blur-xl border border-white/10 rounded-xl p-2 z-20">
-          <div className="space-y-1">
-            <p className="text-white/40 text-xs text-center py-4">Quality settings only for HLS streams</p>
-            <div className="text-[10px] uppercase text-white/30 px-3 py-1 tracking-wider font-semibold">Speed</div>
-            {['0.5','0.75','1','1.25','1.5','2'].map(s => (
-              <button key={s} onClick={() => { const v = document.querySelector('video'); if (v) v.playbackRate = parseFloat(s); }}
-                className={`w-full text-left px-3 py-2 rounded-lg text-sm ${s === '1' ? 'bg-white/10 text-white' : 'text-white/70 hover:bg-white/5'}`}>
-                {s === '1' ? 'Normal' : s + '×'}
+          <div className="flex items-center gap-2">
+            {/* Play/Pause */}
+            <button
+              onClick={togglePlay}
+              className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-transform flex-shrink-0"
+            >
+              {isPlaying ? <Pause size={20} weight="fill" /> : <Play size={20} weight="fill" className="ml-0.5" />}
+            </button>
+
+            {/* Previous channel */}
+            <button
+              onClick={() => navigateChannel(-1)}
+              className="w-9 h-9 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0"
+              title="Previous channel"
+            >
+              <SkipBack size={18} weight="bold" />
+            </button>
+
+            {/* Next channel */}
+            <button
+              onClick={() => navigateChannel(1)}
+              className="w-9 h-9 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0"
+              title="Next channel"
+            >
+              <SkipForward size={18} weight="bold" />
+            </button>
+
+            {/* Volume */}
+            <div
+              className="flex items-center gap-1 group/vol"
+              onMouseEnter={() => setShowVolumeSlider(true)}
+              onMouseLeave={() => setShowVolumeSlider(false)}
+            >
+              <button
+                onClick={toggleMute}
+                className="w-9 h-9 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0"
+              >
+                <VolumeIcon size={18} weight="bold" />
               </button>
-            ))}
-          </div>
-        </motion.div>
-      )}</AnimatePresence>
+              <div
+                className={`overflow-hidden transition-all duration-200 ${
+                  showVolumeSlider ? 'w-24 opacity-100' : 'w-0 opacity-0'
+                }`}
+              >
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={isMuted ? 0 : Math.round(volume * 100)}
+                  onChange={handleVolumeSlider}
+                  className="w-24 h-1 accent-white cursor-pointer"
+                />
+              </div>
+            </div>
 
-      <AnimatePresence>{showShortcuts && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          className="absolute inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-30" onClick={() => setShowShortcuts(false)}>
-          <div className="bg-bg-overlay border border-white/10 rounded-2xl p-8 max-w-md mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold">Keyboard Shortcuts</h3>
-              <button onClick={() => setShowShortcuts(false)} className="text-text-tertiary hover:text-white"><X size={18} /></button>
+            {/* Time display */}
+            <div className="text-xs text-white/70 font-mono whitespace-nowrap min-w-[60px]">
+              {isLive ? (
+                <span className="text-state-error font-bold text-[11px] uppercase tracking-wider">LIVE</span>
+              ) : (
+                <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
+              )}
             </div>
-            <div className="space-y-3 text-sm">
-              {[['Space / K','Play / Pause'],['F','Fullscreen'],['M','Mute'],['P','PiP'],['↑ / ↓','Volume'],['← / →','Channels'],['?','Shortcuts'],['I','Stats'],['Esc','Exit fullscreen']].map(([k,d]) => (
-                <div key={k} className="flex items-center justify-between"><span className="text-white/70">{d}</span><kbd className="px-2 py-1 bg-white/10 rounded text-xs font-mono">{k}</kbd></div>
-              ))}
+
+            <div className="flex-1" />
+
+            {/* Speed dropdown (VOD only) */}
+            {isVod && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowSpeedMenu((v) => !v)}
+                  className="w-9 h-9 rounded-full text-white/70 hover:bg-white/10 flex items-center justify-center flex-shrink-0 text-xs font-mono"
+                  title="Playback speed"
+                >
+                  {playbackSpeed}x
+                </button>
+                {showSpeedMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowSpeedMenu(false)} />
+                    <div className="absolute bottom-full right-0 mb-2 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl p-1.5 z-20 min-w-[100px]">
+                      {PLAYBACK_SPEEDS.map((speed) => (
+                        <button
+                          key={speed}
+                          onClick={() => changeSpeed(speed)}
+                          className={`w-full text-left px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                            speed === playbackSpeed
+                              ? 'bg-white/15 text-white'
+                              : 'text-white/60 hover:bg-white/5 hover:text-white'
+                          }`}
+                        >
+                          {speed === 1 ? 'Normal' : `${speed}x`}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Picture-in-Picture */}
+            <button
+              onClick={togglePiP}
+              className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                isPiP
+                  ? 'bg-white/20 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`}
+              title="Picture-in-Picture (P)"
+            >
+              <PictureInPicture size={16} weight="bold" />
+            </button>
+
+            {/* Fullscreen */}
+            <button
+              onClick={toggleFullscreen}
+              className="w-9 h-9 rounded-full text-white/60 hover:bg-white/10 flex items-center justify-center flex-shrink-0 hover:text-white transition-colors"
+              title="Fullscreen (F)"
+            >
+              <FullscreenIcon size={16} weight="bold" />
+            </button>
+
+            {/* Settings gear (toggles stats) */}
+            <button
+              onClick={() => setShowStats((v) => !v)}
+              className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                showStats
+                  ? 'bg-white/20 text-white'
+                  : 'text-white/60 hover:bg-white/10 hover:text-white'
+              }`}
+              title="Stream stats"
+            >
+              <GearSix size={16} weight={showStats ? 'fill' : 'regular'} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats overlay */}
+      {showStats && !error && (
+        <div className="absolute top-16 right-4 z-20 bg-black/70 backdrop-blur-xl border border-white/10 rounded-xl p-3.5 min-w-[180px] text-[11px] font-mono leading-relaxed">
+          <div className="text-white/40 uppercase tracking-wider font-semibold mb-2 text-[10px]">Stream Stats</div>
+          <div className="space-y-1 text-white/70">
+            <div className="flex justify-between">
+              <span className="text-white/40">Resolution</span>
+              <span>{stats.width > 0 ? `${stats.width}×${stats.height}` : '—'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/40">Bitrate</span>
+              <span>{stats.bitrate > 0 ? `${(stats.bitrate / 1000).toFixed(0)} kbps` : '—'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/40">Codec</span>
+              <span className="truncate max-w-[100px] text-right">{stats.codec || '—'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/40">Buffer</span>
+              <span className={stats.bufferHealth > 2 ? 'text-state-success' : stats.bufferHealth > 0 ? 'text-gold' : 'text-state-error'}>
+                {stats.bufferHealth > 0 ? `${stats.bufferHealth.toFixed(1)}s` : '0s'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/40">Dropped</span>
+              <span>{stats.droppedFrames > 0 ? stats.droppedFrames : '0'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-white/40">Bandwidth</span>
+              <span>{stats.bandwidth > 0 ? `${(stats.bandwidth / 1000).toFixed(0)} kbps` : '—'}</span>
             </div>
           </div>
-        </motion.div>
-      )}</AnimatePresence>
+        </div>
+      )}
     </div>
   );
 };

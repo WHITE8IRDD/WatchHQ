@@ -2,6 +2,22 @@ import http from 'http';
 import https from 'https';
 import { URL } from 'url';
 
+const httpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 60000,
+  maxSockets: 100,
+  maxFreeSockets: 20,
+  timeout: 120000,
+});
+
+const httpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 60000,
+  maxSockets: 100,
+  maxFreeSockets: 20,
+  timeout: 120000,
+});
+
 let proxyServer: http.Server | null = null;
 let proxyPort = 0;
 
@@ -23,6 +39,7 @@ function doRequest(url: string, extraHeaders: Record<string, string>): Promise<{
     const parsedUrl = new URL(url);
     const client = parsedUrl.protocol === 'https:' ? https : http;
 
+    const agent = client === https ? httpsAgent : httpAgent;
     const proxyReq = client.request(url, {
       method: 'GET',
       headers: {
@@ -31,7 +48,8 @@ function doRequest(url: string, extraHeaders: Record<string, string>): Promise<{
         'Icy-MetaData': '0',
         ...extraHeaders,
       },
-      timeout: 30000,
+      agent,
+      timeout: 120000,
     }, (proxyRes) => {
       resolve({ statusCode: proxyRes.statusCode || 200, headers: proxyRes.headers, stream: proxyRes });
     });
@@ -102,10 +120,10 @@ export function startStreamProxy(): Promise<number> {
       if (!res.headersSent) { res.writeHead(502); res.end('Too many redirects'); }
     });
 
-    proxyServer.keepAliveTimeout = 65000;
-    proxyServer.headersTimeout = 70000;
+    proxyServer.keepAliveTimeout = 120000;
+    proxyServer.headersTimeout = 125000;
     proxyServer.requestTimeout = 0;
-    proxyServer.maxConnections = 100;
+    proxyServer.maxConnections = 200;
 
     proxyServer.listen(0, '127.0.0.1', () => {
       const addr = proxyServer!.address();

@@ -110,6 +110,11 @@ app.on('before-quit', () => {
   stopStreamProxy();
 });
 
+// Health check for renderer watchdog
+ipcMain.handle('app:healthCheck', () => {
+  return { ok: true, timestamp: Date.now() };
+});
+
 // Expose stream proxy port
 ipcMain.handle('stream:getProxyPort', () => {
   const port = getProxyPort();

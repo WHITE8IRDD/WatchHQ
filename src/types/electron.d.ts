@@ -257,6 +257,9 @@ declare global {
       setCategoriesHidden: (payload: { ids: string[]; hidden: boolean }) => Promise<{ success: boolean }>;
       getVisibleCategories: (playlistId: string) => Promise<{ id: string; group_title: string }[]>;
 
+      // Health Check
+      healthCheck: () => Promise<{ ok: boolean; timestamp: number }>;
+
       // Stream Proxy
       getStreamProxyPort: () => Promise<number>;
 

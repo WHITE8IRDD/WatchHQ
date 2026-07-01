@@ -106,6 +106,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('categories:setHidden', payload),
   getVisibleCategories: (playlistId: string) => ipcRenderer.invoke('categories:getVisible', playlistId),
 
+  // === Health Check ===
+  healthCheck: () => ipcRenderer.invoke('app:healthCheck'),
+
   // === Stream Proxy ===
   getStreamProxyPort: () => ipcRenderer.invoke('stream:getProxyPort'),
 
