@@ -1,0 +1,82 @@
+{
+  "timestamp": "2026-07-01T14:17:48.828Z",
+  "channelTested": {
+    "id": "d6b7a55f-37c6-41c5-b3c8-fa868dc32a1d",
+    "name": "FR: BEIN SPORT MAX 4",
+    "url": "http://vipbtpxnzmb.top:8080/live/vip2411776253298/e992402fee"
+  },
+  "videoState": {
+    "readyState": 0,
+    "paused": false,
+    "currentTime": 0,
+    "duration": null,
+    "videoWidth": 0,
+    "videoHeight": 0,
+    "error": null,
+    "buffered": null,
+    "src": "blob:file:///cc7a54fe-65ef-4d30-989d-71ff8cf0dd3b"
+  },
+  "errorOverlay": "",
+  "playerState": {
+    "hlsRef": "not found",
+    "mpegtsRef": "not found"
+  },
+  "networkEvents": [
+    {
+      "status": 404,
+      "url": "http://127.0.0.1:13684/http%3A%2F%2Fvipbtpxnzmb.top%3A8080%2Flive%2Fvip2411776253298%2Fe992402fee23%2F376.m3u8",
+      "mimeType": "video/mp2t",
+      "remoteIPAddress": "127.0.0.1"
+    }
+  ],
+  "consoleLogs": [
+    "[CONSOLE.log] [AUTO] Store channels: 14303",
+    "[log] [AUTO] Store channels: 14303",
+    "[CONSOLE.log] [AUTO] Store playlists: 1",
+    "[log] [AUTO] Store playlists: 1",
+    "[CONSOLE.log] [AUTO] Found: FR: BEIN SPORT MAX 4",
+    "[log] [AUTO] Found: FR: BEIN SPORT MAX 4",
+    "[CONSOLE.log] [AUTO] Loading playlists...",
+    "[log] [AUTO] Loading playlists...",
+    "[CONSOLE.log] [AUTO] Playlists loaded: 1",
+    "[log] [AUTO] Playlists loaded: 1",
+    "[CONSOLE.log] [AUTO] Active playlist ID: a371179e-2084-4437-ace1-69e66586099e",
+    "[log] [AUTO] Active playlist ID: a371179e-2084-4437-ace1-69e66586099e",
+    "[CONSOLE.log] [AUTO] Loading channels for: a371179e-2084-4437-ace1-69e66586099e",
+    "[log] [AUTO] Loading channels for: a371179e-2084-4437-ace1-69e66586099e",
+    "[CONSOLE.log] [AUTO] Channels loaded: 14303",
+    "[log] [AUTO] Channels loaded: 14303",
+    "[CONSOLE.log] [AUTO] Store channels: 14303",
+    "[log] [AUTO] Store channels: 14303",
+    "[CONSOLE.log] [AUTO] Setting current channel: FR: BEIN SPORT MAX 4",
+    "[log] [AUTO] Setting current channel: FR: BEIN SPORT MAX 4",
+    "[CONSOLE.log] [STORE-1] setCurrentChannel called with: [object Object]",
+    "[log] [STORE-1] setCurrentChannel called with: Object",
+    "[CONSOLE.log] [STORE-2] Store updated",
+    "[log] [STORE-2] Store updated",
+    "[CONSOLE.log] [PLAY] Channel: FR: BEIN SPORT MAX 4",
+    "[log] [PLAY] Channel: FR: BEIN SPORT MAX 4",
+    "[CONSOLE.log] [PLAY] Loading: http://vipbtpxnzmb.top:8080/live/vip2411776253298/e992402fee23/376.m3u8 retry: false",
+    "[log] [PLAY] Loading: http://vipbtpxnzmb.top:8080/live/vip2411776253298/e992402fee23/376.m3u8 retry: false",
+    "[CONSOLE.log] [PLAY] Using native HLS (URL is .m3u8)",
+    "[log] [PLAY] Using native HLS (URL is .m3u8)",
+    "[CONSOLE.log] [PLAY] 8s timeout — no first frame",
+    "[log] [PLAY] 8s timeout — no first frame",
+    "[CONSOLE.log] [PLAY] Fallback .m3u8→.ts: http://vipbtpxnzmb.top:8080/live/vip2411776253298/e992402fee23/376.ts",
+    "[log] [PLAY] Fallback .m3u8→.ts: http://vipbtpxnzmb.top:8080/live/vip2411776253298/e992402fee23/376.ts",
+    "[CONSOLE.log] [PLAY] Loading: http://vipbtpxnzmb.top:8080/live/vip2411776253298/e992402fee23/376.ts retry: true",
+    "[log] [PLAY] Loading: http://vipbtpxnzmb.top:8080/live/vip2411776253298/e992402fee23/376.ts retry: true",
+    "[CONSOLE.log] [MSEController] > MediaSource onSourceOpen",
+    "[log] [MSEController] > MediaSource onSourceOpen",
+    "[CONSOLE.log] [PLAY-MSE-ERR] NetworkError HttpStatusCodeInvalid",
+    "[log] [PLAY-MSE-ERR] NetworkError HttpStatusCodeInvalid",
+    "[CONSOLE.log] [PLAY] Error before first frame, attempting fallback",
+    "[log] [PLAY] Error before first frame, attempting fallback",
+    "[CONSOLE.log] [PLAY] Both formats failed → MPV",
+    "[log] [PLAY] Both formats failed → MPV",
+    "[CONSOLE.log] [PLAY] 8s timeout — no first frame",
+    "[log] [PLAY] 8s timeout — no first frame",
+    "[CONSOLE.log] [PLAY] Both formats failed → MPV",
+    "[log] [PLAY] Both formats failed → MPV"
+  ]
+}
