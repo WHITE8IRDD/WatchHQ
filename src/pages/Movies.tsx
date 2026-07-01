@@ -3,7 +3,7 @@ import { Film, Star, Heart, Play, X } from 'lucide-react';
 import { ArrowClockwise } from '@phosphor-icons/react';
 import SearchInput from '../components/common/SearchInput';
 import VirtualGrid from '../components/common/VirtualGrid';
-import CategorySidebar from '../components/common/CategorySidebar';
+import CategoryChips from '../components/common/CategoryChips';
 import EmptyState from '../components/common/EmptyState';
 import { useDebounce } from '../hooks/useDebounce';
 import { toast } from '../components/common/Toast';
@@ -171,60 +171,55 @@ const Movies: React.FC = () => {
   }
 
   return (
-    <div className="flex h-full">
-      <CategorySidebar
-        categories={categories}
-        activeCategory={activeCategory}
-        onSelect={setActiveCategory}
-      />
+    <div className="flex flex-col h-full py-4 px-6">
+      <div className="flex items-center gap-3 mb-4 flex-wrap flex-shrink-0">
+        <h1 className="text-2xl font-display font-bold tracking-tight mr-2">Movies</h1>
 
-      <div className="flex-1 py-4 px-6 min-w-0 overflow-y-auto">
-        <div className="flex items-center gap-3 mb-6 flex-wrap">
-          <h1 className="text-2xl font-display font-bold tracking-tight mr-4">Movies</h1>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search movies..."
+          className="flex-1 max-w-xs"
+        />
 
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            placeholder="Search movies..."
-            className="flex-1 max-w-xs"
-          />
+        <button
+          onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${
+            showFavoritesOnly
+              ? 'border-state-error/30 bg-state-error/10 text-state-error'
+              : 'border-border text-text-secondary hover:text-white hover:bg-white/5'
+          }`}
+        >
+          <Heart size={16} fill={showFavoritesOnly ? 'currentColor' : 'none'} />
+        </button>
 
-          <button
-            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm border transition-colors ${
-              showFavoritesOnly
-                ? 'border-state-error/30 bg-state-error/10 text-state-error'
-                : 'border-border text-text-secondary hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Heart size={16} fill={showFavoritesOnly ? 'currentColor' : 'none'} />
-          </button>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as any)}
+          className="bg-bg-elevated border border-border-subtle rounded-xl px-3 py-2 text-sm text-white focus:outline-none"
+        >
+          <option value="name">Name</option>
+          <option value="year">Year</option>
+          <option value="rating">Rating</option>
+        </select>
 
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="bg-bg-elevated border border-border-subtle rounded-xl px-3 py-2 text-sm text-white focus:outline-none"
-          >
-            <option value="name">Name</option>
-            <option value="year">Year</option>
-            <option value="rating">Rating</option>
-          </select>
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-50"
+        >
+          <ArrowClockwise size={16} className={syncing ? 'animate-spin' : ''} />
+          {syncing ? 'Syncing...' : 'Sync Library'}
+        </button>
+      </div>
 
-          <div className="flex-1" />
+      <div className="mb-4 flex-shrink-0">
+        <CategoryChips categories={categories} activeCategory={activeCategory} onSelect={setActiveCategory} />
+      </div>
 
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-50"
-          >
-            <ArrowClockwise size={16} className={syncing ? 'animate-spin' : ''} />
-            {syncing ? 'Syncing...' : 'Sync Library'}
-          </button>
-        </div>
-
-        <p className="text-xs text-text-tertiary mb-4">
-          {filtered.length} movie{filtered.length !== 1 ? 's' : ''}
-        </p>
+      <p className="text-xs text-text-tertiary mb-4 flex-shrink-0">
+        {filtered.length} movie{filtered.length !== 1 ? 's' : ''}
+      </p>
 
         {filtered.length === 0 ? (
           <EmptyState
@@ -287,11 +282,9 @@ const Movies: React.FC = () => {
             />
           </div>
         )}
+        {selected && <MovieDetailModal movie={selected} onClose={() => setSelected(null)} />}
       </div>
-
-      {selected && <MovieDetailModal movie={selected} onClose={() => setSelected(null)} />}
-    </div>
-  );
+    );
 };
 
 const MovieDetailModal: React.FC<{ movie: VodItem; onClose: () => void }> = ({

@@ -8,6 +8,7 @@ import {
 } from '@phosphor-icons/react';
 import VideoPlayer from '../components/player/VideoPlayer';
 import ChannelLogo from '../components/common/ChannelLogo';
+import CategoryChips from '../components/common/CategoryChips';
 import ManageCategoriesModal from '../components/livetv/ManageCategoriesModal';
 import { useDebounce } from '../hooks/useDebounce';
 import { toast } from '../components/common/Toast';
@@ -317,12 +318,20 @@ const LiveTV: React.FC = () => {
 
   const currentEpg = currentChannel?.tvg_id ? epgData[currentChannel.tvg_id] : null;
 
+  const chipCategories = categories.map(c => ({ name: c.group_title !== 'All' ? c.group_title : 'All', count: c.count }));
+
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Category chips strip */}
+      <div className="flex-shrink-0 px-3 py-2 border-b border-border-subtle bg-bg-base">
+        <CategoryChips categories={chipCategories} activeCategory={activeGroup || 'All'} onSelect={(cat) => handleCategoryClick(cat === 'All' ? 'All' : cat)} />
+      </div>
       <ManageCategoriesModal open={showManageCats} onClose={() => setShowManageCats(false)} />
 
+      {/* ── Three-panel row ── */}
+      <div className="flex flex-1 min-h-0">
       {/* ── LEFT: Categories (240px) ── */}
-      <div className="w-[240px] flex-shrink-0 border-r border-border-subtle h-full flex flex-col bg-bg-secondary/30">
+      <div className="w-[240px] flex-shrink-0 border-r border-border-subtle flex flex-col bg-bg-secondary/30">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle flex-shrink-0">
           <h3 className="text-[11px] uppercase tracking-wider text-text-tertiary font-semibold">LIVE CATEGORIES</h3>
           <button
@@ -611,6 +620,7 @@ const LiveTV: React.FC = () => {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 };

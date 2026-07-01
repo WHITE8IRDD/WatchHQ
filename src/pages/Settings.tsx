@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Playlist, Broadcast, Monitor, Sun, Database, Info, TrashSimple,
   DownloadSimple, UploadSimple, FolderOpen, ArrowClockwise, CheckCircle, XCircle,
+  Keyboard, Gear, PlayCircle,
 } from '@phosphor-icons/react';
 import { usePreferencesStore } from '../store/preferencesStore';
 import { toast } from '../components/common/Toast';
@@ -15,15 +16,22 @@ function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   ]);
 }
 
-const fadeInUp = {
-  initial: { opacity: 0, y: 8 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.3, ease: [0.16, 1, 0.3, 1] },
-};
+type SettingsTab = 'general' | 'playback' | 'playlists' | 'epg' | 'data' | 'shortcuts' | 'about';
+
+const TABS: { id: SettingsTab; label: string; icon: React.FC<any> }[] = [
+  { id: 'general', label: 'General', icon: Gear },
+  { id: 'playback', label: 'Playback', icon: PlayCircle },
+  { id: 'playlists', label: 'Playlists', icon: Playlist },
+  { id: 'epg', label: 'EPG', icon: Broadcast },
+  { id: 'data', label: 'Data', icon: Database },
+  { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
+  { id: 'about', label: 'About', icon: Info },
+];
 
 const Settings: React.FC = () => {
   const { prefs, loadPreferences, updatePreference } = usePreferencesStore();
   const [pendingChanges, setPendingChanges] = useState<Record<string, any>>({});
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [playlistsLoading, setPlaylistsLoading] = useState(true);
@@ -72,7 +80,7 @@ const Settings: React.FC = () => {
         await updatePreference(key, value);
       }
       setPendingChanges({});
-      toast.success('Preferences saved');
+      toast.success('Settings saved');
     } catch (err: any) {
       toast.error('Failed to save: ' + err.message);
     }
@@ -176,138 +184,16 @@ const Settings: React.FC = () => {
     ? playlists.find((p) => p.id === confirmDelete)
     : null;
 
-  return (
-    <motion.div className="p-8 pt-6 h-full overflow-y-auto pb-24" {...fadeInUp}>
-      <div className="mb-6">
-        <h1 className="text-2xl font-display font-bold tracking-tight">Settings</h1>
-        <p className="text-text-secondary text-sm mt-1">Manage your IPTV configuration</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Card 1 — Playlists */}
-        <Card icon={Playlist} title="Playlists" subtitle={`${playlists.length} source(s) configured`}>
-          {playlistsLoading ? (
-            <p className="text-text-tertiary text-sm py-4">Loading...</p>
-          ) : playlists.length === 0 ? (
-            <p className="text-text-secondary text-sm">No playlists added yet.</p>
-          ) : (
-            <div className="space-y-2 max-h-[240px] overflow-y-auto">
-              {playlists.map((p) => (
-                <div key={p.id} className="flex items-center justify-between bg-bg-base border border-border-subtle rounded-xl px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{p.name}</p>
-                    <div className="flex items-center gap-3 mt-0.5">
-                      <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-text-secondary rounded font-medium uppercase">{p.type}</span>
-                      <span className="text-xs text-text-tertiary">{p.channel_count || 0} channels</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 ml-3">
-                    <button onClick={() => handleRefreshPlaylist(p.id)}
-                      className="p-1.5 text-text-tertiary hover:text-white rounded-lg hover:bg-white/5 transition-colors">
-                      <ArrowClockwise size={14} />
-                    </button>
-                    <button onClick={() => setConfirmDelete(p.id)}
-                      className="p-1.5 text-text-tertiary hover:text-state-error rounded-lg hover:bg-white/5 transition-colors">
-                      <TrashSimple size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Card 2 — Player */}
-        <Card icon={Monitor} title="Player" subtitle="Playback engine configuration">
-          {playerLoading ? (
-            <p className="text-text-tertiary text-sm py-4">Loading...</p>
-          ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-text-tertiary mb-1.5 block">Default Player</label>
-                <select
-                  value={prefValue('player_type') || 'internal'}
-                  onChange={(e) => stagePreference('player_type', e.target.value)}
-                  className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20"
-                >
-                  <option value="internal">Internal (HLS.js)</option>
-                  <option value="mpv">MPV</option>
-                  <option value="vlc">VLC</option>
-                </select>
-              </div>
-
-              <ToggleSetting
-                label="Hardware Acceleration"
-                description="Use GPU for video decoding"
-                checked={prefValue('hardware_acceleration') === 1}
-                onChange={(v) => stagePreference('hardware_acceleration', v ? 1 : 0)}
-              />
-              <ToggleSetting
-                label="Remember Playback Position"
-                description="Resume from where you left off"
-                checked={prefValue('remember_position') === 1}
-                onChange={(v) => stagePreference('remember_position', v ? 1 : 0)}
-              />
-              <ToggleSetting
-                label="Auto-Play Next Episode"
-                description="Automatically play next episode in series"
-                checked={prefValue('auto_play_next') === 1}
-                onChange={(v) => stagePreference('auto_play_next', v ? 1 : 0)}
-              />
-
-              <div className="flex items-center justify-between bg-bg-base rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {playerStatus.mpv?.available ? (
-                    <CheckCircle size={14} className="text-state-success" weight="fill" />
-                  ) : (
-                    <XCircle size={14} className="text-state-error" weight="fill" />
-                  )}
-                  <span className="text-sm text-text-secondary">
-                    MPV: {playerStatus.mpv?.available ? `Detected at ${prefValue('mpv_path') || 'default path'}` : 'Not found'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => locateBinary('mpv')}
-                  disabled={locatingMpv}
-                  className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-white/5 transition-colors disabled:opacity-40"
-                >
-                  {locatingMpv ? '...' : 'Locate'}
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between bg-bg-base rounded-xl px-4 py-3">
-                <div className="flex items-center gap-2">
-                  {playerStatus.vlc?.available ? (
-                    <CheckCircle size={14} className="text-state-success" weight="fill" />
-                  ) : (
-                    <XCircle size={14} className="text-state-error" weight="fill" />
-                  )}
-                  <span className="text-sm text-text-secondary">
-                    VLC: {playerStatus.vlc?.available ? `Detected at ${prefValue('vlc_path') || 'default path'}` : 'Not found'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => locateBinary('vlc')}
-                  disabled={locatingVlc}
-                  className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-white/5 transition-colors disabled:opacity-40"
-                >
-                  {locatingVlc ? '...' : 'Locate'}
-                </button>
-              </div>
-            </div>
-          )}
-        </Card>
-
-        {/* Card 3 — Display */}
-        <Card icon={Sun} title="Display" subtitle="Visual preferences">
-          <div className="space-y-4">
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'general':
+        return (
+          <div className="space-y-5">
+            <h3 className="font-display font-semibold text-base">General</h3>
             <div>
               <label className="text-xs text-text-tertiary mb-1.5 block">Grid Size</label>
-              <select
-                value={prefValue('grid_size') || 'medium'}
-                onChange={(e) => stagePreference('grid_size', e.target.value)}
-                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20"
-              >
+              <select value={prefValue('grid_size') || 'medium'} onChange={(e) => stagePreference('grid_size', e.target.value)}
+                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20">
                 <option value="small">Small (140px)</option>
                 <option value="medium">Medium (180px)</option>
                 <option value="large">Large (220px)</option>
@@ -315,45 +201,96 @@ const Settings: React.FC = () => {
             </div>
             <div>
               <label className="text-xs text-text-tertiary mb-1.5 block">Sort Channels By</label>
-              <select
-                value={prefValue('sort_channels_by') || 'name'}
-                onChange={(e) => stagePreference('sort_channels_by', e.target.value)}
-                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20"
-              >
+              <select value={prefValue('sort_channels_by') || 'name'} onChange={(e) => stagePreference('sort_channels_by', e.target.value)}
+                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20">
                 <option value="name">Name</option>
                 <option value="number">Channel Number</option>
                 <option value="group">Category</option>
                 <option value="recent">Recently Watched</option>
               </select>
             </div>
-            <ToggleSetting
-              label="Show Channel Numbers"
-              checked={prefValue('show_channel_numbers') === 1}
-              onChange={(v) => stagePreference('show_channel_numbers', v ? 1 : 0)}
-            />
-            <ToggleSetting
-              label="Show Channel Logos"
-              checked={prefValue('show_channel_logos') === 1}
-              onChange={(v) => stagePreference('show_channel_logos', v ? 1 : 0)}
-            />
+            <ToggleSetting label="Show Channel Numbers" checked={prefValue('show_channel_numbers') === 1} onChange={(v) => stagePreference('show_channel_numbers', v ? 1 : 0)} />
+            <ToggleSetting label="Show Channel Logos" checked={prefValue('show_channel_logos') === 1} onChange={(v) => stagePreference('show_channel_logos', v ? 1 : 0)} />
+            <ToggleSetting label="Compact Mode" description="Smaller interface elements" checked={prefValue('compact_mode') === 1} onChange={(v) => stagePreference('compact_mode', v ? 1 : 0)} />
+            <ToggleSetting label="Start Minimized" description="Launch app to system tray" checked={prefValue('start_minimized') === 1} onChange={(v) => stagePreference('start_minimized', v ? 1 : 0)} />
+            <ToggleSetting label="Debug Logging" description="Enable verbose console output" checked={prefValue('debug_logging') === 1} onChange={(v) => stagePreference('debug_logging', v ? 1 : 0)} />
           </div>
-        </Card>
+        );
 
-        {/* Card 4 — EPG */}
-        <Card icon={Broadcast} title="EPG (XMLTV)" subtitle="Electronic Program Guide data">
-          <div className="space-y-3">
+      case 'playback':
+        return (
+          <div className="space-y-5">
+            <h3 className="font-display font-semibold text-base">Playback</h3>
+            {playerLoading ? (
+              <p className="text-text-tertiary text-sm py-4">Loading...</p>
+            ) : (
+              <>
+                <div>
+                  <label className="text-xs text-text-tertiary mb-1.5 block">Default Player</label>
+                  <select value={prefValue('player_type') || 'internal'} onChange={(e) => stagePreference('player_type', e.target.value)}
+                    className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20">
+                    <option value="internal">Internal (HLS.js)</option>
+                    <option value="mpv">MPV</option>
+                    <option value="vlc">VLC</option>
+                  </select>
+                </div>
+                <ToggleSetting label="Hardware Acceleration" description="Use GPU for video decoding" checked={prefValue('hardware_acceleration') === 1} onChange={(v) => stagePreference('hardware_acceleration', v ? 1 : 0)} />
+                <ToggleSetting label="Remember Playback Position" description="Resume from where you left off" checked={prefValue('remember_position') === 1} onChange={(v) => stagePreference('remember_position', v ? 1 : 0)} />
+                <ToggleSetting label="Auto-Play Next Episode" description="Automatically play next episode in series" checked={prefValue('auto_play_next') === 1} onChange={(v) => stagePreference('auto_play_next', v ? 1 : 0)} />
+                <BinaryStatus name="MPV" available={playerStatus.mpv?.available} path={prefValue('mpv_path')} onLocate={() => locateBinary('mpv')} loading={locatingMpv} />
+                <BinaryStatus name="VLC" available={playerStatus.vlc?.available} path={prefValue('vlc_path')} onLocate={() => locateBinary('vlc')} loading={locatingVlc} />
+              </>
+            )}
+          </div>
+        );
+
+      case 'playlists':
+        return (
+          <div className="space-y-5">
+            <h3 className="font-display font-semibold text-base">Playlists</h3>
+            {playlistsLoading ? (
+              <p className="text-text-tertiary text-sm py-4">Loading...</p>
+            ) : playlists.length === 0 ? (
+              <p className="text-text-secondary text-sm">No playlists added yet.</p>
+            ) : (
+              <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                {playlists.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between bg-bg-base border border-border-subtle rounded-xl px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{p.name}</p>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-[10px] px-1.5 py-0.5 bg-white/10 text-text-secondary rounded font-medium uppercase">{p.type}</span>
+                        <span className="text-xs text-text-tertiary">{p.channel_count || 0} channels</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 ml-3">
+                      <button onClick={() => handleRefreshPlaylist(p.id)}
+                        className="p-1.5 text-text-tertiary hover:text-white rounded-lg hover:bg-white/5 transition-colors">
+                        <ArrowClockwise size={14} />
+                      </button>
+                      <button onClick={() => setConfirmDelete(p.id)}
+                        className="p-1.5 text-text-tertiary hover:text-state-error rounded-lg hover:bg-white/5 transition-colors">
+                        <TrashSimple size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+
+      case 'epg':
+        return (
+          <div className="space-y-5">
+            <h3 className="font-display font-semibold text-base">EPG (XMLTV)</h3>
+            <p className="text-xs text-text-tertiary">Electronic Program Guide data</p>
             <div className="flex gap-2">
-              <input
-                value={epgUrl}
-                onChange={(e) => setEpgUrl(e.target.value)}
+              <input value={epgUrl} onChange={(e) => setEpgUrl(e.target.value)}
                 placeholder="https://example.com/xmltv.xml.gz"
-                className="flex-1 bg-bg-base border border-border-subtle rounded-xl px-4 py-2.5 text-sm text-white placeholder-text-tertiary focus:outline-none focus:border-white/20 transition-colors"
-              />
-              <button
-                onClick={handleEpgSync}
-                disabled={syncing || !epgUrl}
-                className="px-4 py-2.5 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-40 flex items-center gap-2"
-              >
+                className="flex-1 bg-bg-base border border-border-subtle rounded-xl px-4 py-2.5 text-sm text-white placeholder-text-tertiary focus:outline-none focus:border-white/20 transition-colors" />
+              <button onClick={handleEpgSync} disabled={syncing || !epgUrl}
+                className="px-4 py-2.5 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-40 flex items-center gap-2">
                 {syncing ? <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : 'Import'}
               </button>
             </div>
@@ -372,10 +309,8 @@ const Settings: React.FC = () => {
                     {epgSources.map((s: any) => (
                       <div key={s.id} className="flex items-center justify-between bg-bg-base rounded-lg px-3 py-2 text-xs">
                         <span className="truncate text-text-tertiary">{s.url}</span>
-                        <button onClick={async () => {
-                          await window.electronAPI.removeEpgSource(s.id);
-                          setEpgSources(await window.electronAPI.getEpgSources().catch(() => []));
-                        }} className="p-1 text-text-tertiary hover:text-state-error transition-colors ml-2">
+                        <button onClick={async () => { await window.electronAPI.removeEpgSource(s.id); setEpgSources(await window.electronAPI.getEpgSources().catch(() => [])); }}
+                          className="p-1 text-text-tertiary hover:text-state-error transition-colors ml-2">
                           <TrashSimple size={12} />
                         </button>
                       </div>
@@ -385,115 +320,101 @@ const Settings: React.FC = () => {
               </>
             )}
           </div>
-        </Card>
+        );
 
-        {/* Card 5 — Data Management */}
-        <Card icon={Database} title="Data Management" subtitle="Backup, restore, and maintenance">
-          <div className="space-y-2">
-            <ActionButton
-              icon={FolderOpen} label="Open Data Folder"
-              onClick={() => window.electronAPI.openDataFolder()}
-            />
-            <ActionButton
-              icon={DownloadSimple} label="Export Database Backup"
-              onClick={handleExportBackup}
-            />
-            <ActionButton
-              icon={UploadSimple} label="Import Database Backup"
-              onClick={handleImportBackup}
-            />
-            <ActionButton
-              icon={TrashSimple} label="Clear Watch History"
-              onClick={async () => {
-                await window.electronAPI.clearHistory();
-                toast.success('Watch history cleared');
-                await loadPreferences();
-              }}
-            />
-            <button onClick={() => setConfirmClearAll(true)}
-              className="flex items-center gap-3 w-full px-4 py-3 bg-state-error/5 border border-state-error/20 rounded-xl text-sm text-state-error hover:bg-state-error/10 transition-colors">
-              <TrashSimple size={16} />
-              <span>Clear All Data</span>
+      case 'data':
+        return (
+          <div className="space-y-5">
+            <h3 className="font-display font-semibold text-base">Data Management</h3>
+            <div className="space-y-2">
+              <ActionButton icon={FolderOpen} label="Open Data Folder" onClick={() => window.electronAPI.openDataFolder()} />
+              <ActionButton icon={DownloadSimple} label="Export Database Backup" onClick={handleExportBackup} />
+              <ActionButton icon={UploadSimple} label="Import Database Backup" onClick={handleImportBackup} />
+              <ActionButton icon={TrashSimple} label="Clear Watch History" onClick={async () => { await window.electronAPI.clearHistory(); toast.success('Watch history cleared'); await loadPreferences(); }} />
+              <button onClick={() => setConfirmClearAll(true)}
+                className="flex items-center gap-3 w-full px-4 py-3 bg-state-error/5 border border-state-error/20 rounded-xl text-sm text-state-error hover:bg-state-error/10 transition-colors">
+                <TrashSimple size={16} />
+                <span>Clear All Data</span>
+              </button>
+            </div>
+          </div>
+        );
+
+      case 'shortcuts':
+        return (
+          <div className="space-y-5">
+            <h3 className="font-display font-semibold text-base">Keyboard Shortcuts</h3>
+            <div className="space-y-2 text-sm">
+              {[
+                ['Toggle Sidebar', 'Ctrl + B'],
+                ['Search', 'Ctrl + K / Ctrl + F'],
+                ['Fullscreen', 'F'],
+                ['Reload Channels', 'Ctrl + R'],
+                ['Play / Pause', 'Space / K'],
+                ['Mute', 'M'],
+                ['Volume Up / Down', '↑ / ↓'],
+                ['Previous / Next Channel', '← / → (live)'],
+                ['Picture-in-Picture', 'P'],
+                ['Exit Fullscreen', 'Esc'],
+              ].map(([action, key]) => (
+                <div key={action} className="flex justify-between py-1.5 border-b border-border-subtle/50">
+                  <span className="text-text-secondary">{action}</span>
+                  <kbd className="px-2 py-0.5 bg-bg-base rounded text-xs text-text-tertiary font-mono">{key}</kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+
+      case 'about':
+        return (
+          <div className="space-y-5">
+            <h3 className="font-display font-semibold text-base">About</h3>
+            <div className="flex flex-col items-center py-6">
+              <div className="w-16 h-16 rounded-2xl bg-gold flex items-center justify-center mb-4">
+                <span className="text-black font-bold text-3xl">W</span>
+              </div>
+              <h3 className="font-display font-bold text-2xl tracking-tight">WatchHQ</h3>
+              <p className="text-text-tertiary text-sm mt-0.5">v1.0.0</p>
+              <p className="text-text-tertiary text-xs mt-3">Built with Electron</p>
+              <button onClick={() => window.electronAPI.openDataFolder()}
+                className="mt-3 text-xs text-text-tertiary hover:text-white underline underline-offset-2 transition-colors">
+                Open data folder →
+              </button>
+            </div>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="flex h-full">
+      {/* Left tab rail */}
+      <div className="w-[200px] flex-shrink-0 border-r border-border-subtle bg-bg-base/50 flex flex-col py-6 px-3 overflow-y-auto">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left ${
+                activeTab === tab.id
+                  ? 'bg-white/10 text-white font-medium'
+                  : 'text-text-secondary hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Icon size={18} />
+              {tab.label}
             </button>
-          </div>
-        </Card>
+          );
+        })}
+      </div>
 
-        {/* Card 6 — About */}
-        <Card icon={Info} title="About" subtitle="WatchHQ IPTV Player">
-          <div className="flex flex-col items-center py-4">
-            <div className="w-14 h-14 rounded-2xl bg-gold flex items-center justify-center mb-3">
-              <span className="text-black font-bold text-2xl">W</span>
-            </div>
-            <h3 className="font-display font-bold text-xl tracking-tight">WatchHQ</h3>
-            <p className="text-text-tertiary text-sm mt-0.5">v1.0.0</p>
-            <p className="text-text-tertiary text-xs mt-3">Built with Electron</p>
-            <button onClick={() => window.electronAPI.openDataFolder()}
-              className="mt-2 text-xs text-text-tertiary hover:text-white underline underline-offset-2 transition-colors">
-              Open data folder →
-            </button>
-          </div>
-        </Card>
-
-        {/* Card 7 — Keyboard Shortcuts */}
-        <Card icon={Monitor} title="Keyboard Shortcuts" subtitle="Quick reference">
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between py-1.5 border-b border-border-subtle/50">
-              <span className="text-text-secondary">Toggle Sidebar</span>
-              <kbd className="px-2 py-0.5 bg-bg-base rounded text-xs text-text-tertiary font-mono">Ctrl + B</kbd>
-            </div>
-            <div className="flex justify-between py-1.5 border-b border-border-subtle/50">
-              <span className="text-text-secondary">Search</span>
-              <kbd className="px-2 py-0.5 bg-bg-base rounded text-xs text-text-tertiary font-mono">Ctrl + F</kbd>
-            </div>
-            <div className="flex justify-between py-1.5 border-b border-border-subtle/50">
-              <span className="text-text-secondary">Fullscreen</span>
-              <kbd className="px-2 py-0.5 bg-bg-base rounded text-xs text-text-tertiary font-mono">F</kbd>
-            </div>
-            <div className="flex justify-between py-1.5">
-              <span className="text-text-secondary">Reload Channels</span>
-              <kbd className="px-2 py-0.5 bg-bg-base rounded text-xs text-text-tertiary font-mono">Ctrl + R</kbd>
-            </div>
-          </div>
-        </Card>
-
-        {/* Card 8 — Advanced */}
-        <Card icon={Database} title="Advanced" subtitle="Developer options">
-          <div className="space-y-3">
-            <div className="flex items-center justify-between bg-bg-base rounded-xl px-4 py-3">
-              <div>
-                <p className="text-sm">Debug Logging</p>
-                <p className="text-xs text-text-tertiary mt-0.5">Enable verbose console output</p>
-              </div>
-              <ToggleSetting
-                label=""
-                checked={prefValue('debug_logging') === 1}
-                onChange={(v) => stagePreference('debug_logging', v ? 1 : 0)}
-              />
-            </div>
-            <div className="flex items-center justify-between bg-bg-base rounded-xl px-4 py-3">
-              <div>
-                <p className="text-sm">Start Minimized</p>
-                <p className="text-xs text-text-tertiary mt-0.5">Launch app to system tray</p>
-              </div>
-              <ToggleSetting
-                label=""
-                checked={prefValue('start_minimized') === 1}
-                onChange={(v) => stagePreference('start_minimized', v ? 1 : 0)}
-              />
-            </div>
-            <div className="flex items-center justify-between bg-bg-base rounded-xl px-4 py-3">
-              <div>
-                <p className="text-sm">Compact Mode</p>
-                <p className="text-xs text-text-tertiary mt-0.5">Smaller interface elements</p>
-              </div>
-              <ToggleSetting
-                label=""
-                checked={prefValue('compact_mode') === 1}
-                onChange={(v) => stagePreference('compact_mode', v ? 1 : 0)}
-              />
-            </div>
-          </div>
-        </Card>
+      {/* Right content pane */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-8 pb-24">
+          {renderTabContent()}
+        </div>
       </div>
 
       {confirmDelete && playlistsToDelete && (
@@ -532,33 +453,16 @@ const Settings: React.FC = () => {
             </p>
             <div className="flex items-center gap-3">
               <button onClick={discardChanges}
-                className="px-5 py-2.5 text-sm border border-border-subtle rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors"
-              >Discard</button>
+                className="px-5 py-2.5 text-sm border border-border-subtle rounded-xl text-text-secondary hover:text-white hover:bg-white/5 transition-colors">Discard</button>
               <button onClick={savePreferences}
-                className="px-5 py-2.5 text-sm bg-white text-black rounded-xl font-medium hover:bg-white/90 transition-colors"
-              >Save Changes</button>
+                className="px-5 py-2.5 text-sm bg-white text-black rounded-xl font-medium hover:bg-white/90 transition-colors">Save Changes</button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   );
 };
-
-const Card: React.FC<{ icon: React.FC<any>; title: string; subtitle: string; children: React.ReactNode }> = ({ icon: Icon, title, subtitle, children }) => (
-  <motion.div className="bg-bg-elevated border border-border-subtle rounded-2xl p-6" {...fadeInUp}>
-    <div className="flex items-center gap-3 mb-4">
-      <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-        <Icon size={20} />
-      </div>
-      <div>
-        <h3 className="font-display font-semibold text-sm">{title}</h3>
-        <p className="text-text-tertiary text-xs">{subtitle}</p>
-      </div>
-    </div>
-    {children}
-  </motion.div>
-);
 
 const ToggleSetting: React.FC<{ label: string; description?: string; checked: boolean; onChange: (value: boolean) => void }> = ({ label, description, checked, onChange }) => (
   <div className="flex items-center justify-between py-1">
@@ -569,8 +473,7 @@ const ToggleSetting: React.FC<{ label: string; description?: string; checked: bo
       </div>
     )}
     <button onClick={() => onChange(!checked)}
-      className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${label || description ? 'ml-3' : ''} ${checked ? 'bg-white' : 'bg-white/10'}`}
-    >
+      className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${label || description ? 'ml-3' : ''} ${checked ? 'bg-white' : 'bg-white/10'}`}>
       <span className={`absolute top-1 w-4 h-4 rounded-full bg-black transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
     </button>
   </div>
@@ -582,6 +485,19 @@ const ActionButton: React.FC<{ icon: React.FC<any>; label: string; onClick: () =
     <Icon size={16} className="text-text-tertiary" />
     <span>{label}</span>
   </button>
+);
+
+const BinaryStatus: React.FC<{ name: string; available: boolean; path: string; onLocate: () => void; loading: boolean }> = ({ name, available, path, onLocate, loading }) => (
+  <div className="flex items-center justify-between bg-bg-base rounded-xl px-4 py-3">
+    <div className="flex items-center gap-2">
+      {available ? <CheckCircle size={14} className="text-state-success" weight="fill" /> : <XCircle size={14} className="text-state-error" weight="fill" />}
+      <span className="text-sm text-text-secondary">{name}: {available ? `Detected at ${path || 'default path'}` : 'Not found'}</span>
+    </div>
+    <button onClick={onLocate} disabled={loading}
+      className="px-3 py-1.5 text-xs border border-border rounded-lg hover:bg-white/5 transition-colors disabled:opacity-40">
+      {loading ? '...' : 'Locate'}
+    </button>
+  </div>
 );
 
 export default Settings;

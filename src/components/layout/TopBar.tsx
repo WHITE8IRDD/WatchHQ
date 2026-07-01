@@ -1,17 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { usePlaylistStore } from '../../store/playlistStore';
-import { ChevronDown, Plus, Download, RefreshCw, Info, Trash2, Search, SlidersHorizontal, Bell } from 'lucide-react';
+import { ChevronDown, Plus, RefreshCw, Info, Trash2, Search } from 'lucide-react';
 import { toast } from '../common/Toast';
 import ConfirmDialog from '../common/ConfirmDialog';
 
 interface TopBarProps {
   onOpenPalette: () => void;
   onOpenAddPlaylist: () => void;
-  onOpenAdvancedSearch: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onOpenPalette, onOpenAddPlaylist, onOpenAdvancedSearch }) => {
+const TopBar: React.FC<TopBarProps> = ({ onOpenPalette, onOpenAddPlaylist }) => {
   const { playlists, activePlaylistId, activePlaylist, setActivePlaylist, loadPlaylists, refreshPlaylist, deletePlaylist, loadChannels } = usePlaylistStore();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -76,7 +75,7 @@ const TopBar: React.FC<TopBarProps> = ({ onOpenPalette, onOpenAddPlaylist, onOpe
       {playlists.length > 0 && (
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
-            <button className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-bg-elevated border border-border-subtle hover:bg-bg-hover transition-colors text-sm min-w-0 max-w-[200px]">
+            <button className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-bg-elevated border border-border-subtle hover:bg-bg-hover transition-colors text-sm min-w-0 max-w-[220px]">
               <span className="w-2 h-2 rounded-full bg-state-success flex-shrink-0" />
               <span className="text-white font-medium truncate">
                 {activePlaylist?.name || 'Select playlist'}
@@ -176,16 +175,9 @@ const TopBar: React.FC<TopBarProps> = ({ onOpenPalette, onOpenAddPlaylist, onOpe
         </button>
       )}
 
-      {/* Center: Advanced search + search input */}
-      <div className="flex-1 flex items-center gap-2 justify-center max-w-[600px] mx-auto">
-        <button
-          onClick={onOpenAdvancedSearch}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-bg-elevated border border-border-subtle text-xs text-text-secondary hover:text-white hover:bg-bg-hover transition-colors whitespace-nowrap"
-        >
-          <SlidersHorizontal size={14} />
-          Advanced search
-        </button>
-        <div className="relative flex-1 max-w-[400px]">
+      {/* Center: Search input */}
+      <div className="flex-1 flex items-center justify-center max-w-[480px] mx-auto">
+        <div className="relative w-full">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary pointer-events-none" />
           <input
             type="text"
@@ -207,18 +199,6 @@ const TopBar: React.FC<TopBarProps> = ({ onOpenPalette, onOpenAddPlaylist, onOpe
         title="Add playlist"
       >
         <Plus size={18} />
-      </button>
-      <button
-        className="w-9 h-9 rounded-xl bg-white/5 border border-border-subtle text-text-secondary hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
-        title="Download"
-      >
-        <Download size={18} />
-      </button>
-      <button
-        className="w-9 h-9 rounded-xl bg-white/5 border border-border-subtle text-text-secondary hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
-        title="Notifications"
-      >
-        <Bell size={18} />
       </button>
 
       {/* Delete confirmation */}

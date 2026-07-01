@@ -212,6 +212,13 @@ const History: React.FC = () => {
                       <Play size={14} className="text-white" />
                     </Link>
                     <button
+                      onClick={async () => {
+                        try {
+                          await window.electronAPI.clearHistoryItem({ item_type: entry.item_type, item_id: entry.item_id });
+                          loadHistory();
+                          toast.success('Removed from history');
+                        } catch { toast.error('Failed to remove'); }
+                      }}
                       className="p-2 rounded-lg hover:bg-white/5 text-text-tertiary hover:text-state-error transition-colors"
                       title="Remove"
                     >

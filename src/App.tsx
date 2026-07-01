@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import TopBar from './components/layout/TopBar';
@@ -12,23 +12,15 @@ import Playlists from './pages/Playlists';
 import Settings from './pages/Settings';
 import CommandPalette from './components/common/CommandPalette';
 import AddPlaylistModal from './components/playlist/AddPlaylistModal';
-import AdvancedSearchModal from './components/livetv/AdvancedSearchModal';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { ToastContainer } from './components/common/Toast';
 import { usePreferencesStore } from './store/preferencesStore';
-import { usePlaylistStore } from './store/playlistStore';
 
 const App: React.FC = () => {
   const loadPreferences = usePreferencesStore((s) => s.loadPreferences);
-  const activePlaylistId = usePlaylistStore((s) => s.activePlaylistId);
 
   const [showCmdPalette, setShowCmdPalette] = useState(false);
   const [showAddPlaylist, setShowAddPlaylist] = useState(false);
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-
-  const handleAdvancedSearchApply = useCallback((filters: { category: string; country: string; quality: string }) => {
-    window.dispatchEvent(new CustomEvent('advanced-search-apply', { detail: filters }));
-  }, []);
 
   useEffect(() => {
     const handler = () => setShowAddPlaylist(true);
@@ -49,7 +41,6 @@ const App: React.FC = () => {
             <TopBar
               onOpenPalette={() => setShowCmdPalette(true)}
               onOpenAddPlaylist={() => setShowAddPlaylist(true)}
-              onOpenAdvancedSearch={() => setShowAdvancedSearch(true)}
             />
             <main className="flex-1 overflow-y-auto">
               <Routes>
@@ -70,12 +61,6 @@ const App: React.FC = () => {
         {showAddPlaylist && (
           <AddPlaylistModal onClose={() => setShowAddPlaylist(false)} />
         )}
-        <AdvancedSearchModal
-          open={showAdvancedSearch}
-          onClose={() => setShowAdvancedSearch(false)}
-          playlistId={activePlaylistId || ''}
-          onApply={handleAdvancedSearchApply}
-        />
         <ToastContainer />
       </HashRouter>
     </ErrorBoundary>
