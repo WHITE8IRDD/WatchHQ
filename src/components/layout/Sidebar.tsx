@@ -48,7 +48,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 )}
               </NavLink>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Home<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">Home<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
 
           <Tooltip.Root>
@@ -62,7 +62,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 )}
               </NavLink>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Playlists<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">Playlists<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
 
           <Tooltip.Root>
@@ -76,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 )}
               </NavLink>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Favorites<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">Favorites<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
 
           <Tooltip.Root>
@@ -90,7 +90,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 )}
               </NavLink>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">History<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">History<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
         </nav>
 
@@ -109,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 )}
               </NavLink>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Movies<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">Movies<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
 
           <Tooltip.Root>
@@ -123,7 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 )}
               </NavLink>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Live TV<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">Live TV<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
 
           <Tooltip.Root>
@@ -137,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 )}
               </NavLink>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Series<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">Series<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
         </nav>
 
@@ -156,7 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 </motion.div>
               </button>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Search<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">Search<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
 
           <Tooltip.Root>
@@ -170,7 +170,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
                 )}
               </NavLink>
             </Tooltip.Trigger>
-            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-2.5 py-1.5 rounded-lg z-[100]">Settings<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
+            <Tooltip.Portal><Tooltip.Content side="right" sideOffset={8} className="bg-bg-overlay border border-border-subtle text-white text-xs font-medium px-3 py-1.5 rounded-lg shadow-xl z-[100]">Settings<Tooltip.Arrow className="fill-bg-overlay" /></Tooltip.Content></Tooltip.Portal>
           </Tooltip.Root>
         </div>
       </aside>

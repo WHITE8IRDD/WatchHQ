@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Play, Clock, Film, ListVideo, ChevronLeft, ChevronRight, Tv, Info, RefreshCw, Trash2, Clapperboard, Heart } from 'lucide-react';
+import { Plus, Clock, Film, ListVideo, ChevronLeft, ChevronRight, Tv, Info, RefreshCw, Trash2, Clapperboard, Heart } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -18,7 +18,7 @@ function formatProgress(entry: WatchHistoryEntry): string {
   const dur = entry.duration_seconds || 0;
   if (dur === 0) return 'Started';
   const pct = Math.round((pos / dur) * 100);
-  return `${pct}% complete • ${formatTime(pos)} / ${formatTime(dur)}`;
+  return `${pct}% · ${formatTime(pos)} / ${formatTime(dur)}`;
 }
 
 function formatTime(seconds: number): string {
@@ -30,7 +30,6 @@ function formatTime(seconds: number): string {
 }
 
 const Dashboard: React.FC = () => {
-  const [heroItem, setHeroItem] = useState<WatchHistoryEntry | null>(null);
   const [recentlyWatched, setRecentlyWatched] = useState<WatchHistoryEntry[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<any[]>([]);
@@ -41,7 +40,6 @@ const Dashboard: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   const recentRef = useRef<HTMLDivElement>(null);
-  const playlistRef = useRef<HTMLDivElement>(null);
   const addedRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,7 +50,6 @@ const Dashboard: React.FC = () => {
           withTimeout(window.electronAPI.getPlaylists()),
         ]);
         setRecentlyWatched(history || []);
-        setHeroItem(history?.[0] || null);
         setPlaylists(pl || []);
         if (pl && pl.length > 0) {
           const id = pl[0].id;
@@ -114,150 +111,109 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  const hasAnySource = playlists.length > 0;
+
+  if (!hasAnySource) {
+    return (
+      <div className="flex items-center justify-center h-[80vh] px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+          className="text-center"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-emerald-400 flex items-center justify-center mx-auto mb-6 shadow-lg shadow-accent/20">
+            <span className="text-black font-bold text-2xl font-display">W</span>
+          </div>
+          <h1 className="text-3xl font-display font-bold mb-2">Welcome to WatchHQ</h1>
+          <p className="text-text-secondary text-sm mb-8 max-w-sm mx-auto">
+            Add your first IPTV playlist to start browsing channels, movies, and series.
+          </p>
+          <Link
+            to="/playlists"
+            className="inline-flex items-center gap-2 bg-white text-black rounded-xl px-6 py-3 font-medium hover:bg-white/90 transition-colors"
+          >
+            <Plus size={16} /> Add Your First Source
+          </Link>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
-    <div className="px-8 py-6 max-w-[1400px] mx-auto space-y-6">
-      {/* Hero Banner */}
-      {heroItem ? (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="relative rounded-2xl overflow-hidden h-[60vh] max-h-[720px] flex items-end"
-        >
-          {heroItem.icon && (
-            <div className="absolute inset-0">
-              <img src={heroItem.icon} alt="" className="w-full h-full object-cover blur-2xl scale-110" />
+    <div className="px-8 py-6 max-w-[1400px] mx-auto space-y-8">
+      {/* Status strip */}
+      <div className="flex items-center gap-6 flex-wrap">
+        {[
+          { label: 'Channels', value: totalChannels.toLocaleString(), icon: Tv },
+          { label: 'Movies', value: vodCount.toLocaleString(), icon: Film },
+          { label: 'Series', value: seriesCount.toLocaleString(), icon: Clapperboard },
+          { label: 'Sources', value: playlists.length.toLocaleString(), icon: ListVideo },
+        ].map((stat) => (
+          <div key={stat.label} className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center">
+              <stat.icon size={16} className="text-accent" />
             </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-          <div className="relative z-10 p-8 md:p-12 w-full">
-            <span className="inline-block bg-gold/10 text-gold text-xs uppercase tracking-[0.14em] font-semibold px-2.5 py-1 rounded-full mb-4">
-              Continue Watching
-            </span>
-            <h1 className="text-4xl md:text-5xl font-display font-bold tracking-tight mb-2">
-              {heroItem.title || 'Unknown'}
-            </h1>
-            <p className="text-text-secondary text-sm mb-4">
-              {heroItem.item_type} · {formatProgress(heroItem)}
-            </p>
-            <div className="flex items-center gap-3">
-              <Link
-                to={heroItem.item_type === 'channel' ? '/live' : '/movies'}
-                className="flex items-center gap-2 bg-white text-black rounded-xl px-5 py-2.5 font-medium hover:bg-white/90 transition-colors"
-              >
-                <Play size={16} /> Continue Watching
-              </Link>
-              <Link
-                to={heroItem.item_type === 'channel' ? '/live' : '/movies'}
-                className="flex items-center gap-2 border border-border rounded-xl px-4 py-2.5 text-text-secondary hover:text-white hover:border-white/30 transition-colors"
-              >
-                <Info size={16} /> Info
-              </Link>
+            <div>
+              <p className="text-lg font-display font-bold tracking-tight bg-gradient-to-r from-accent to-emerald-300 bg-clip-text text-transparent">{stat.value}</p>
+              <p className="text-[11px] text-text-tertiary leading-tight">{stat.label}</p>
             </div>
           </div>
-        </motion.div>
-      ) : (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="relative rounded-2xl overflow-hidden h-[60vh] max-h-[720px] flex items-center justify-center bg-gradient-to-b from-bg-elevated to-bg-base border border-border-subtle"
-        >
-          <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-display font-bold mb-3">Welcome to WatchHQ</h1>
-            <p className="text-text-secondary text-sm mb-6">Add your first playlist to get started</p>
-            <Link
-              to="/playlists"
-              className="inline-flex items-center gap-2 bg-white text-black rounded-xl px-5 py-2.5 font-medium hover:bg-white/90 transition-colors"
-            >
-              <ListVideo size={16} /> Add Playlist
-            </Link>
-          </div>
-        </motion.div>
-      )}
+        ))}
+      </div>
 
-      {/* Stat strip */}
-      {playlists.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {[
-            { label: 'Channels', value: totalChannels.toLocaleString(), icon: Tv },
-            { label: 'Movies', value: vodCount.toLocaleString(), icon: Film },
-            { label: 'Series', value: seriesCount.toLocaleString(), icon: Clapperboard },
-            { label: 'Sources', value: playlists.length.toLocaleString(), icon: ListVideo },
-          ].map((stat) => (
-            <div key={stat.label} className="bg-white/[0.03] border border-white/5 rounded-xl p-4 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
-                <stat.icon size={18} className="text-accent" />
-              </div>
-              <div>
-                <p className="text-2xl font-display font-bold tracking-tight">{stat.value}</p>
-                <p className="text-xs text-text-tertiary">{stat.label}</p>
-              </div>
+      {/* Quick-jump banner tiles */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { to: '/live', icon: Tv, label: 'Live TV', desc: `${totalChannels.toLocaleString()} channels`, gradient: 'from-blue-500/20 to-blue-600/5' },
+          { to: '/movies', icon: Film, label: 'Movies', desc: `${vodCount.toLocaleString()} titles`, gradient: 'from-purple-500/20 to-purple-600/5' },
+          { to: '/series', icon: Clapperboard, label: 'Series', desc: `${seriesCount.toLocaleString()} series`, gradient: 'from-amber-500/20 to-amber-600/5' },
+          { to: '/favorites', icon: Heart, label: 'Favorites', desc: 'Your saved content', gradient: 'from-rose-500/20 to-rose-600/5' },
+        ].map((tile) => (
+          <Link key={tile.to} to={tile.to} className="card-depth-hover group p-5">
+            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${tile.gradient} flex items-center justify-center mb-3`}>
+              <tile.icon size={20} className="text-white" />
             </div>
-          ))}
-        </div>
-      )}
+            <p className="text-base font-semibold">{tile.label}</p>
+            <p className="text-xs text-text-tertiary mt-0.5">{tile.desc}</p>
+          </Link>
+        ))}
+      </div>
 
-      {/* Quick jump tiles */}
-      {playlists.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Link to="/live" className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:bg-white/[0.06] hover:border-white/10 transition-all group">
-            <Tv size={24} className="text-accent mb-2" />
-            <p className="text-sm font-semibold">Live TV</p>
-            <p className="text-xs text-text-tertiary mt-0.5">{totalChannels.toLocaleString()} channels</p>
-          </Link>
-          <Link to="/movies" className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:bg-white/[0.06] hover:border-white/10 transition-all group">
-            <Film size={24} className="text-accent mb-2" />
-            <p className="text-sm font-semibold">Movies</p>
-            <p className="text-xs text-text-tertiary mt-0.5">{vodCount.toLocaleString()} titles</p>
-          </Link>
-          <Link to="/series" className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:bg-white/[0.06] hover:border-white/10 transition-all group">
-            <Clapperboard size={24} className="text-accent mb-2" />
-            <p className="text-sm font-semibold">Series</p>
-            <p className="text-xs text-text-tertiary mt-0.5">{seriesCount.toLocaleString()} series</p>
-          </Link>
-          <Link to="/favorites" className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:bg-white/[0.06] hover:border-white/10 transition-all group">
-            <Heart size={24} className="text-accent mb-2" />
-            <p className="text-sm font-semibold">Favorites</p>
-            <p className="text-xs text-text-tertiary mt-0.5">Your starred content</p>
-          </Link>
-        </div>
-      )}
-
-      {/* Recently Watched */}
+      {/* Continue Watching rail */}
       {recentlyWatched.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Clock size={18} className="text-text-tertiary" />
-              <h2 className="font-display font-semibold text-sm">Recently Watched</h2>
-              <span className="text-[11px] text-text-tertiary bg-bg-elevated px-1.5 py-0.5 rounded-md">{recentlyWatched.length}</span>
+              <Clock size={16} className="text-accent" />
+              <h2 className="font-display font-semibold text-sm text-white">Continue Watching</h2>
+              <span className="text-[11px] text-text-tertiary bg-white/5 px-1.5 py-0.5 rounded-md">{recentlyWatched.length}</span>
             </div>
             <div className="flex items-center gap-2">
-              <Link to="/favorites" className="text-xs text-text-tertiary hover:text-white transition-colors">Manage all →</Link>
-              <button onClick={() => scroll(recentRef, -1)} className="w-7 h-7 rounded-lg bg-bg-elevated border border-border flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronLeft size={14} /></button>
-              <button onClick={() => scroll(recentRef, 1)} className="w-7 h-7 rounded-lg bg-bg-elevated border border-border flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronRight size={14} /></button>
+              <button onClick={() => scroll(recentRef, -1)} className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronLeft size={14} /></button>
+              <button onClick={() => scroll(recentRef, 1)} className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronRight size={14} /></button>
             </div>
           </div>
           <div ref={recentRef} className="flex gap-3 overflow-x-auto scrollbar-hide pb-2" style={{ scrollbarWidth: 'none' }}>
             {recentlyWatched.map((item) => (
               <Link
                 key={item.id || `${item.item_type}-${item.item_id}`}
-                to={item.item_type === 'channel' ? '/live' : '/movies'}
-                className="flex-shrink-0 w-[160px] group/card"
+                to={item.item_type === 'channel' ? '/live' : item.item_type === 'vod' ? '/movies' : '/series'}
+                className="flex-shrink-0 w-[180px] group/card"
               >
-                <div className="aspect-video bg-bg-elevated border border-border rounded-xl overflow-hidden flex items-center justify-center group-hover/card:-translate-y-1 transition-all duration-200 group-hover/card:shadow-lg">
+                <div className="aspect-video card-depth overflow-hidden flex items-center justify-center group-hover/card:-translate-y-1 transition-all duration-200 group-hover/card:shadow-lg">
                   {item.icon ? (
                     <img src={item.icon} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
                     <Tv size={24} className="text-text-tertiary" />
                   )}
                 </div>
-                <div className="mt-2">
+                <div className="mt-2.5">
                   <p className="text-sm font-medium truncate">{item.title || 'Unknown'}</p>
-                  <p className="text-[11px] text-text-tertiary mt-0.5">
-                    {item.last_watched ? new Date(item.last_watched * 1000).toLocaleDateString() : ''}
-                  </p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <div className="w-1 h-1 rounded-full bg-accent" />
+                    <p className="text-[11px] text-text-tertiary">{formatProgress(item)}</p>
+                  </div>
                 </div>
               </Link>
             ))}
@@ -265,99 +221,27 @@ const Dashboard: React.FC = () => {
         </section>
       )}
 
-      {/* Recently Used Sources */}
-      {playlists.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <ListVideo size={18} className="text-text-tertiary" />
-              <h2 className="font-display font-semibold text-sm">Recently Used Sources</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={() => scroll(playlistRef, -1)} className="w-7 h-7 rounded-lg bg-bg-elevated border border-border flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronLeft size={14} /></button>
-              <button onClick={() => scroll(playlistRef, 1)} className="w-7 h-7 rounded-lg bg-bg-elevated border border-border flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronRight size={14} /></button>
-            </div>
-          </div>
-          <div ref={playlistRef} className="flex gap-3 overflow-x-auto scrollbar-hide pb-2" style={{ scrollbarWidth: 'none' }}>
-            {playlists.map((pl) => (
-              <div
-                key={pl.id}
-                className="flex-shrink-0 w-[220px] bg-bg-elevated border border-border rounded-xl p-4 hover:-translate-y-1 transition-all duration-200"
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-state-success flex-shrink-0" />
-                    <span className="text-sm font-medium truncate text-white">{pl.name}</span>
-                  </div>
-                  <DropdownMenu.Root>
-                    <DropdownMenu.Trigger asChild>
-                      <button className="w-7 h-7 rounded-lg flex items-center justify-center text-text-tertiary hover:text-white hover:bg-white/5 transition-colors flex-shrink-0">
-                        ⋮
-                      </button>
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Portal>
-                      <DropdownMenu.Content
-                        className="min-w-[160px] bg-bg-elevated border border-border rounded-xl p-1 shadow-xl z-50"
-                        sideOffset={4}
-                        align="end"
-                      >
-                        <DropdownMenu.Item
-                          className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 rounded-lg cursor-pointer outline-none transition-colors"
-                          onClick={() => handleRefreshPlaylist(pl.id)}
-                        >
-                          <RefreshCw size={14} /> Refresh
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 rounded-lg cursor-pointer outline-none transition-colors"
-                          onClick={() => toast.info(`${pl.name} · ${pl.type.toUpperCase()} · ${pl.channel_count} channels · ${pl.vod_count} VOD`)}
-                        >
-                          <Info size={14} /> Info
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Separator className="h-px bg-border my-1" />
-                        <DropdownMenu.Item
-                          className="flex items-center gap-2 px-3 py-2 text-sm text-state-error hover:text-state-error hover:bg-state-error/5 rounded-lg cursor-pointer outline-none transition-colors"
-                          onClick={() => setDeleteTarget(pl.id)}
-                        >
-                          <Trash2 size={14} /> Remove
-                        </DropdownMenu.Item>
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Portal>
-                  </DropdownMenu.Root>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                    pl.type === 'm3u' ? 'bg-blue-500/20 text-blue-400' :
-                    pl.type === 'xtream' ? 'bg-green-500/20 text-green-400' : 'bg-purple-500/20 text-purple-400'
-                  }`}>{pl.type.toUpperCase()}</span>
-                  <span className="text-[11px] text-text-tertiary">{pl.channel_count || 0} channels</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Recently Added */}
+      {/* Recently Added rail */}
       {recentlyAdded.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Film size={18} className="text-text-tertiary" />
-              <h2 className="font-display font-semibold text-sm">Recently Added</h2>
+              <Film size={16} className="text-accent" />
+              <h2 className="font-display font-semibold text-sm text-white">Recently Added</h2>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => scroll(addedRef, -1)} className="w-7 h-7 rounded-lg bg-bg-elevated border border-border flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronLeft size={14} /></button>
-              <button onClick={() => scroll(addedRef, 1)} className="w-7 h-7 rounded-lg bg-bg-elevated border border-border flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronRight size={14} /></button>
+              <button onClick={() => scroll(addedRef, -1)} className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronLeft size={14} /></button>
+              <button onClick={() => scroll(addedRef, 1)} className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-text-tertiary hover:text-white transition-colors"><ChevronRight size={14} /></button>
             </div>
           </div>
           <div ref={addedRef} className="flex gap-3 overflow-x-auto scrollbar-hide pb-2" style={{ scrollbarWidth: 'none' }}>
             {recentlyAdded.map((item: any, i: number) => (
               <Link
                 key={item.id || item.stream_id || i}
-                to="/movies"
+                to={item._type === 'series' ? '/series' : '/movies'}
                 className="flex-shrink-0 w-[140px] group/card"
               >
-                <div className="aspect-[2/3] bg-bg-elevated border border-border rounded-xl overflow-hidden flex items-center justify-center group-hover/card:-translate-y-1 transition-all duration-200 group-hover/card:shadow-lg">
+                <div className="aspect-[2/3] card-depth overflow-hidden flex items-center justify-center group-hover/card:-translate-y-1 transition-all duration-200 group-hover/card:shadow-lg">
                   {item.icon || item.cover ? (
                     <img src={item.icon || item.cover} alt={item.name} className="w-full h-full object-cover" />
                   ) : (
@@ -370,6 +254,50 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
       )}
+
+      {/* Sources (demoted) */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <ListVideo size={16} className="text-text-tertiary" />
+          <h2 className="font-display font-semibold text-sm text-white">Sources</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {playlists.map((pl) => (
+            <div key={pl.id} className="group relative">
+              <div className="flex items-center gap-2 bg-white/[0.03] border border-white/5 rounded-lg px-3 py-1.5 text-sm hover:bg-white/[0.06] transition-colors">
+                <span className="w-1.5 h-1.5 rounded-full bg-state-success flex-shrink-0" />
+                <span className="text-text-secondary group-hover:text-white transition-colors">{pl.name}</span>
+                <span className={`text-[10px] px-1 py-0.5 rounded font-medium ${
+                  pl.type === 'm3u' ? 'bg-blue-500/20 text-blue-400' :
+                  pl.type === 'xtream' ? 'bg-green-500/20 text-green-400' : 'bg-purple-500/20 text-purple-400'
+                }`}>{pl.type.toUpperCase()}</span>
+                <span className="text-[11px] text-text-tertiary">{pl.channel_count || 0}ch</span>
+              </div>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button className="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded flex items-center justify-center text-text-tertiary hover:text-white hover:bg-white/10 transition-colors opacity-0 group-hover:opacity-100">
+                    ⋮
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content className="min-w-[160px] bg-bg-elevated border border-border rounded-xl p-1 shadow-xl z-50" sideOffset={4} align="end">
+                    <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 rounded-lg cursor-pointer outline-none transition-colors" onClick={() => handleRefreshPlaylist(pl.id)}>
+                      <RefreshCw size={14} /> Refresh
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:text-white hover:bg-white/5 rounded-lg cursor-pointer outline-none transition-colors" onClick={() => toast.info(`${pl.name} · ${pl.type.toUpperCase()} · ${pl.channel_count} channels · ${pl.vod_count} VOD`)}>
+                      <Info size={14} /> Info
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Separator className="h-px bg-border my-1" />
+                    <DropdownMenu.Item className="flex items-center gap-2 px-3 py-2 text-sm text-state-error hover:text-state-error hover:bg-state-error/5 rounded-lg cursor-pointer outline-none transition-colors" onClick={() => setDeleteTarget(pl.id)}>
+                      <Trash2 size={14} /> Remove
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Delete confirmation dialog */}
       {deleteTarget && (

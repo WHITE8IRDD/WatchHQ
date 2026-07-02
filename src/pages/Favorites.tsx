@@ -85,7 +85,7 @@ const Favorites: React.FC = () => {
   const renderChannelCard = (ch: any) => (
     <div
       onClick={() => { setCurrentChannel(ch); navigate('/live'); }}
-      className="bg-bg-elevated border border-border-subtle rounded-xl p-3 cursor-pointer hover:border-white/20 transition-colors group"
+      className="card-depth-hover p-3 cursor-pointer group"
     >
       <div className="w-full h-10 flex items-center justify-center mb-2">
         {ch.tvg_logo ? (
@@ -106,7 +106,7 @@ const Favorites: React.FC = () => {
 
   const renderVodCard = (item: any) => (
     <div className="group cursor-pointer">
-      <div className="aspect-[2/3] rounded-xl overflow-hidden bg-bg-elevated border border-border-subtle relative">
+      <div className="aspect-[2/3] rounded-xl overflow-hidden card-depth relative">
         {item.icon ? (
           <img src={item.icon} alt="" className="w-full h-full object-cover" loading="lazy" />
         ) : (
@@ -128,7 +128,7 @@ const Favorites: React.FC = () => {
 
   const renderSeriesCard = (s: any) => (
     <div className="group cursor-pointer" onClick={() => navigate('/series')}>
-      <div className="aspect-[2/3] rounded-xl overflow-hidden bg-bg-elevated border border-border-subtle relative">
+      <div className="aspect-[2/3] rounded-xl overflow-hidden card-depth relative">
         {s.cover ? (
           <img src={s.cover} alt="" className="w-full h-full object-cover" loading="lazy" />
         ) : (

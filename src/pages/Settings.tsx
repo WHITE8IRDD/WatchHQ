@@ -189,7 +189,7 @@ const Settings: React.FC = () => {
       case 'general':
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-4">
+            <div className="card-depth p-5 space-y-4">
               <h3 className="font-display font-semibold text-sm text-text-secondary uppercase tracking-wider">Display</h3>
               <div>
                 <label className="text-xs text-text-tertiary mb-1.5 block">Grid Size</label>
@@ -221,7 +221,7 @@ const Settings: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-4">
+            <div className="card-depth p-5 space-y-4">
               <h3 className="font-display font-semibold text-sm text-text-secondary uppercase tracking-wider">Behavior</h3>
               <div>
                 <label className="text-xs text-text-tertiary mb-1.5 block">Sort Channels By</label>
@@ -277,7 +277,7 @@ const Settings: React.FC = () => {
             ) : (
               <div className="space-y-2 max-h-[400px] overflow-y-auto">
                 {playlists.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between bg-bg-base border border-border-subtle rounded-xl px-4 py-3">
+                  <div key={p.id} className="flex items-center justify-between card-depth px-4 py-3">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{p.name}</p>
                       <div className="flex items-center gap-3 mt-0.5">
@@ -329,7 +329,7 @@ const Settings: React.FC = () => {
                 {epgSources.length > 0 && (
                   <div className="space-y-1">
                     {epgSources.map((s: any) => (
-                      <div key={s.id} className="flex items-center justify-between bg-bg-base rounded-lg px-3 py-2 text-xs">
+                      <div key={s.id} className="flex items-center justify-between bg-bg-base border border-border-subtle rounded-lg px-3 py-2 text-xs">
                         <span className="truncate text-text-tertiary">{s.url}</span>
                         <button onClick={async () => { await window.electronAPI.removeEpgSource(s.id); setEpgSources(await window.electronAPI.getEpgSources().catch(() => [])); }}
                           className="p-1 text-text-tertiary hover:text-state-error transition-colors ml-2">
@@ -434,7 +434,7 @@ const Settings: React.FC = () => {
 
       {/* Right content pane */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[1400px] mx-auto px-8 py-6 pb-24">
+        <div className="max-w-[900px] mx-auto px-8 py-6 pb-24">
           {renderTabContent()}
         </div>
       </div>
@@ -503,14 +503,14 @@ const ToggleSetting: React.FC<{ label: string; description?: string; checked: bo
 
 const ActionButton: React.FC<{ icon: React.FC<any>; label: string; onClick: () => void }> = ({ icon: Icon, label, onClick }) => (
   <button onClick={onClick}
-    className="flex items-center gap-3 w-full px-4 py-3 bg-bg-base border border-border-subtle rounded-xl text-sm hover:bg-white/[0.02] transition-colors">
+    className="flex items-center gap-3 w-full px-4 py-3 card-depth-hover text-sm">
     <Icon size={16} className="text-text-tertiary" />
     <span>{label}</span>
   </button>
 );
 
 const BinaryStatus: React.FC<{ name: string; available: boolean; path: string; onLocate: () => void; loading: boolean }> = ({ name, available, path, onLocate, loading }) => (
-  <div className="flex items-center justify-between bg-bg-base rounded-xl px-4 py-3">
+  <div className="flex items-center justify-between card-depth px-4 py-3">
     <div className="flex items-center gap-2">
       {available ? <CheckCircle size={14} className="text-state-success" weight="fill" /> : <XCircle size={14} className="text-state-error" weight="fill" />}
       <span className="text-sm text-text-secondary">{name}: {available ? `Detected at ${path || 'default path'}` : 'Not found'}</span>

@@ -237,7 +237,7 @@ const Playlists: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.2 }}
-                    className="group flex items-center gap-4 bg-white/[0.03] border border-white/5 hover:border-white/10 rounded-xl p-4 transition-all"
+                    className="card-depth-hover group flex items-center gap-4 p-4"
                   >
                     {/* Type icon */}
                     <div className="w-11 h-11 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
