@@ -377,7 +377,13 @@ const VideoPlayer: React.FC = () => {
         try { video.removeAttribute('src'); video.load(); } catch {}
       }
     };
-  }, [currentChannel?.id, currentChannel?.url]);
+  }, [currentChannel?.id]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      (window as any).__attachHUD?.(videoRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -1102,4 +1108,4 @@ const VideoPlayer: React.FC = () => {
   );
 };
 
-export default React.memo(VideoPlayer);
+export default React.memo(VideoPlayer, () => true);

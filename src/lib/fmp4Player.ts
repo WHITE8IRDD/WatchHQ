@@ -21,6 +21,10 @@ export class Fmp4Player {
   }
 
   async load(): Promise<void> {
+    if (this.mediaSource) {
+      console.warn('[fMP4] load() called twice, ignoring');
+      return;
+    }
     if (!('MediaSource' in window)) {
       throw new Error('MediaSource unsupported');
     }
