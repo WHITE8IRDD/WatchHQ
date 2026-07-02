@@ -12,7 +12,7 @@ export default defineConfig(async () => ({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['better-sqlite3'],
+              external: ['better-sqlite3', 'ffmpeg-static'],
             },
             commonjsOptions: {
               ignoreDynamicRequires: true,

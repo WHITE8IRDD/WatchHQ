@@ -18,7 +18,8 @@ function hashCode(str: string): number {
 }
 
 function extractInitials(name: string): string {
-  const clean = name.replace(/[^\w\u0600-\u06FF\u0400-\u04FF\u4E00-\u9FFF\s]/g, '').trim();
+  const safe = name ?? '';
+  const clean = safe.replace(/[^\w\u0600-\u06FF\u0400-\u04FF\u4E00-\u9FFF\s]/g, '').trim();
   const parts = clean.split(/\s+/).filter(Boolean);
   if (parts.length === 0) return '?';
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();

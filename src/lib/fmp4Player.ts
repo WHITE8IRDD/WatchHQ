@@ -72,17 +72,35 @@ export class Fmp4Player {
     this.video.addEventListener('loadeddata', onCanPlay, { once: true });
 
     let lastT = 0;
-    let rewindCount = 0;
-    const startAt = Date.now();
     this.video.addEventListener('timeupdate', () => {
       const t = this.video.currentTime;
       if (lastT > 0 && t < lastT - 0.05) {
-        rewindCount++;
-        const elapsed = ((Date.now() - startAt) / 1000).toFixed(1);
-        console.error(`🔴 REWIND #${rewindCount} at ${elapsed}s: ${lastT.toFixed(3)} → ${t.toFixed(3)}`);
+        console.error(`🔴 REWIND: ${lastT.toFixed(3)} → ${t.toFixed(3)}`);
       }
       lastT = t;
     });
+
+    if (typeof window !== 'undefined') {
+      (window as any).__rewindLog = [];
+      const v = this.video;
+      let last = 0;
+      setInterval(() => {
+        if (!v) return;
+        const t = v.currentTime;
+        if (last > 0 && t < last - 0.05) {
+          (window as any).__rewindLog.push({
+            at: new Date().toISOString(),
+            from: last.toFixed(3),
+            to: t.toFixed(3),
+            delta: (last - t).toFixed(3),
+            src: v.src.substring(0, 60),
+            srcType: v.src.startsWith('blob:') ? 'MediaSource' : 'direct',
+            buffered: v.buffered.length ? `${v.buffered.start(0).toFixed(1)}-${v.buffered.end(v.buffered.length-1).toFixed(1)}` : 'none',
+          });
+        }
+        last = t;
+      }, 100);
+    }
 
     this.abortController = new AbortController();
 
