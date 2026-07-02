@@ -10,6 +10,7 @@ import VideoPlayer from '../components/player/VideoPlayer';
 import ChannelLogo from '../components/common/ChannelLogo';
 import CategoryChips from '../components/common/CategoryChips';
 import ManageCategoriesModal from '../components/livetv/ManageCategoriesModal';
+import NowPlayingPanel from '../components/livetv/NowPlayingPanel';
 import { useDebounce } from '../hooks/useDebounce';
 import { toast } from '../components/common/Toast';
 import * as ContextMenu from '@radix-ui/react-context-menu';
@@ -19,6 +20,32 @@ function withTimeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
     promise,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
   ]);
+}
+
+function calcEpgProgress(now: any): number {
+  if (!now?.start_time || !now?.end_time) return 0;
+  const start = new Date(now.start_time).getTime();
+  const end = new Date(now.end_time).getTime();
+  const nowMs = Date.now();
+  if (isNaN(start) || isNaN(end) || end <= start) return 0;
+  return Math.min(100, Math.max(0, ((nowMs - start) / (end - start)) * 100));
+}
+
+function formatTime(t: string | number): string {
+  if (!t && t !== 0) return '';
+  if (typeof t === 'number') {
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}`;
+    return `${m}:${Math.floor(t % 60).toString().padStart(2, '0')}`;
+  }
+  const d = new Date(t);
+  if (!isNaN(d.getTime())) {
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  }
+  const m = t.match(/(\d{2}):(\d{2})/);
+  if (m) return `${m[1]}:${m[2]}`;
+  return t;
 }
 
 function getCategoryIcon(name: string): string {
@@ -42,7 +69,7 @@ const ChannelRow = React.memo(({
   ch, isActive, showLogos, showNumbers, epg, onSelect, onToggleFavorite,
 }: {
   ch: any; isActive: boolean; showLogos: boolean; showNumbers: boolean;
-  epg: { now: any; next: any } | null;
+  epg: { now: any; next: any; progress?: number } | null;
   onSelect: (ch: any) => void;
   onToggleFavorite: (ch: any) => void;
 }) => {
@@ -65,38 +92,56 @@ const ChannelRow = React.memo(({
       <ContextMenu.Trigger asChild>
         <button
           onClick={() => onSelect(ch)}
-          className={`w-full flex items-center gap-3 px-3 text-left transition-colors ${
+          className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-all duration-150 ${
             isActive
-              ? 'bg-white/10 border-l-2 border-white'
-              : 'hover:bg-white/5 border-l-2 border-transparent'
+              ? 'bg-accent/10 border-l-2 border-accent'
+              : 'hover:bg-white/5 border-l-2 border-transparent hover:scale-[1.01]'
           }`}
-          style={{ height: 64 }}
         >
-          {showNumbers && ch.tvg_chno && (
-            <span className="w-7 text-right text-[11px] text-text-tertiary font-mono flex-shrink-0">{ch.tvg_chno}</span>
+          {showNumbers && (
+            <span className="w-12 text-right text-[11px] text-text-tertiary font-mono flex-shrink-0 mt-2 tabular-nums">
+              {ch.tvg_chno || ''}
+            </span>
           )}
           {showLogos && (
-            <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-bg-elevated">
+            <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 mt-0.5 bg-bg-elevated">
               <ChannelLogo name={ch.tvg_name} logo={ch.tvg_logo} size={40} />
             </div>
           )}
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFavorite(ch); }}
-            className="p-1.5 rounded-lg hover:bg-white/5 flex-shrink-0 ml-1"
+            className={`p-1.5 rounded-lg hover:bg-white/5 flex-shrink-0 mt-1 transition-transform duration-150 active:scale-90 ${
+              isActive ? 'text-gold' : ''
+            }`}
             title={ch.is_favorite ? 'Remove from Favorites' : 'Add to Favorites'}
           >
             <Star size={14} weight={ch.is_favorite ? 'fill' : 'regular'} className={ch.is_favorite ? 'text-gold' : 'text-text-tertiary hover:text-white'} />
           </button>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium truncate">{ch.tvg_name}</span>
-            </div>
-            {epg?.now && (
-              <p className="text-xs text-text-tertiary truncate mt-0.5">{epg.now.title}</p>
+            <p title={ch.tvg_name} className="text-sm font-semibold leading-snug break-words">{ch.tvg_name}</p>
+            {epg?.now ? (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[11px] text-text-tertiary flex-shrink-0 tabular-nums">{formatTime(epg.now.start_time)}</span>
+                <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                  <div className="h-full bg-accent rounded-full transition-all duration-500" style={{ width: `${epg.progress || 0}%` }} />
+                </div>
+                <span className="text-[11px] text-text-tertiary flex-shrink-0 tabular-nums">{formatTime(epg.now.end_time)}</span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-text-tertiary/60 mt-1 italic">No program information available</p>
             )}
           </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); handleChannelInfo(); }}
+            className="p-1.5 rounded hover:bg-white/10 flex-shrink-0 mt-1 transition-colors"
+            title="Channel Info"
+          >
+            <MagnifyingGlass size={14} className="text-text-tertiary" />
+          </button>
           {isLive && (
-            <span className="w-2 h-2 rounded-full bg-state-error animate-pulse flex-shrink-0" title="Live" />
+            <span className="w-2 h-2 rounded-full bg-state-error animate-pulse flex-shrink-0 mt-2" title="Live">
+              <span className="block w-2 h-2 rounded-full bg-state-error animate-ping absolute inset-0" />
+            </span>
           )}
         </button>
       </ContextMenu.Trigger>
@@ -316,7 +361,12 @@ const LiveTV: React.FC = () => {
     overscan: 10,
   });
 
-  const currentEpg = currentChannel?.tvg_id ? epgData[currentChannel.tvg_id] : null;
+  function enrichEpg(raw: { now: any; next: any } | null): { now: any; next: any; progress?: number } | null {
+    if (!raw) return null;
+    return { ...raw, progress: calcEpgProgress(raw.now) };
+  }
+
+  const currentEpg = currentChannel?.tvg_id ? enrichEpg(epgData[currentChannel.tvg_id]) : null;
 
   const chipCategories = categories.map(c => ({ name: c.group_title !== 'All' ? c.group_title : 'All', count: c.count }));
 
@@ -330,10 +380,10 @@ const LiveTV: React.FC = () => {
 
       {/* ── Three-panel row ── */}
       <div className="flex flex-1 min-h-0">
-      {/* ── LEFT: Categories (240px) ── */}
-      <div className="w-[240px] flex-shrink-0 border-r border-border-subtle flex flex-col bg-bg-secondary/30">
+      {/* ── LEFT: Categories (280px) ── */}
+      <div className="w-[280px] flex-shrink-0 border-r border-border-subtle flex flex-col bg-bg-secondary/30">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle flex-shrink-0">
-          <h3 className="text-[11px] uppercase tracking-wider text-text-tertiary font-semibold">LIVE CATEGORIES</h3>
+          <h3 className="text-[11px] uppercase tracking-wider text-text-tertiary font-semibold tracking-[0.08em]">LIVE CATEGORIES</h3>
           <button
             onClick={() => setShowManageCats(true)}
             className="w-7 h-7 rounded-lg hover:bg-bg-elevated flex items-center justify-center text-text-tertiary hover:text-white transition-colors"
@@ -358,7 +408,7 @@ const LiveTV: React.FC = () => {
         </div>
 
         {/* Category list */}
-        <div ref={parentRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5" style={{ contain: 'strict' }}>
+        <div ref={parentRef} className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5 scrollbar-thin" style={{ contain: 'strict' }}>
           <div style={{ height: categoryVirtualizer.getTotalSize(), position: 'relative' }}>
             {categoryVirtualizer.getVirtualItems().map((virtualRow) => {
               const isAll = virtualRow.index === 0;
@@ -379,30 +429,30 @@ const LiveTV: React.FC = () => {
                   {isAll ? (
                     <button
                       onClick={() => handleCategoryClick('All')}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-start gap-2 ${
                         activeGroup === 'All' && !debouncedCategorySearch
-                          ? 'bg-white/10 text-white'
-                          : 'text-text-secondary hover:text-white hover:bg-white/5'
+                          ? 'bg-white/10 text-white border-l-2 border-accent'
+                          : 'text-text-secondary hover:text-white hover:bg-white/5 border-l-2 border-transparent'
                       }`}
                     >
-                      <span className="text-base w-6 text-center flex-shrink-0">📺</span>
-                      <span className="truncate flex-1">All Channels</span>
-                      <span className="text-[10px] text-text-tertiary ml-2">
+                      <span className="text-base w-6 text-center flex-shrink-0 mt-0.5">📺</span>
+                      <span className="flex-1 text-sm break-words leading-tight">All Channels</span>
+                      <span className="text-[10px] text-text-tertiary flex-shrink-0 mt-0.5 tabular-nums">
                         {categories.find((c) => c.group_title === 'All')?.count ?? channels.length}
                       </span>
                     </button>
                   ) : (
                     <button
                       onClick={() => handleCategoryClick(cat!.group_title)}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center justify-between ${
+                      className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-start gap-2 ${
                         activeGroup === cat!.group_title
-                          ? 'bg-white/10 text-white'
-                          : 'text-text-secondary hover:text-white hover:bg-white/5'
+                          ? 'bg-accent/10 text-white border-l-2 border-accent'
+                          : 'text-text-secondary hover:text-white hover:bg-white/5 border-l-2 border-transparent'
                       }`}
                     >
-                      <span className="text-base w-6 text-center flex-shrink-0">{getCategoryIcon(cat!.group_title)}</span>
-                      <span className="truncate flex-1">{cat!.group_title}</span>
-                      <span className="text-[10px] text-text-tertiary ml-2">{cat!.count}</span>
+                      <span className="text-base w-6 text-center flex-shrink-0 mt-0.5">{getCategoryIcon(cat!.group_title)}</span>
+                      <span className="flex-1 text-sm break-words leading-tight">{cat!.group_title}</span>
+                      <span className="text-[10px] text-text-tertiary flex-shrink-0 mt-0.5 tabular-nums">{cat!.count}</span>
                     </button>
                   )}
                 </div>
@@ -415,7 +465,7 @@ const LiveTV: React.FC = () => {
       {/* ── MIDDLE: Channel List (320px) ── */}
       <div className="w-[320px] flex-shrink-0 border-r border-border-subtle h-full flex flex-col bg-bg-base">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle flex-shrink-0 min-h-[44px]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle flex-shrink-0 min-h-[44px]">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
               onClick={handleHome}
@@ -429,7 +479,7 @@ const LiveTV: React.FC = () => {
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-[11px] text-text-tertiary font-mono">{sortedChannels.length}</span>
+            <span className="text-[11px] text-text-tertiary font-mono tabular-nums">{sortedChannels.length}</span>
             <button
               onClick={() => setSortChannelsBy((s) => (s === 'name' ? 'number' : 'name'))}
               className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
@@ -449,7 +499,7 @@ const LiveTV: React.FC = () => {
         </div>
 
         {/* Channel list */}
-        <div ref={channelParentRef} className="flex-1 overflow-y-auto" style={{ contain: 'strict' }}>
+        <div ref={channelParentRef} className="flex-1 overflow-y-auto scrollbar-thin" style={{ contain: 'strict' }}>
           {playlists.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center px-4">
               <Television size={32} className="text-text-tertiary mb-3" />
@@ -463,16 +513,29 @@ const LiveTV: React.FC = () => {
               </button>
             </div>
           ) : loadingCat ? (
-            <div className="flex items-center justify-center py-16">
-              <ArrowClockwise size={20} className="text-text-tertiary animate-spin" />
+            <div className="px-3 py-2 space-y-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-3 px-3 py-2.5 animate-pulse">
+                  {showNumbers && <div className="w-12 h-3 bg-white/5 rounded mt-2 flex-shrink-0" />}
+                  {showLogos && <div className="w-10 h-10 rounded-lg bg-white/5 flex-shrink-0 mt-0.5" />}
+                  <div className="flex-1 space-y-1.5 mt-1">
+                    <div className="h-3 bg-white/5 rounded w-3/4" />
+                    <div className="h-2 bg-white/[0.03] rounded w-1/2" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : sortedChannels.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center px-4">
               <Television size={28} className="text-text-tertiary mb-3" />
-              <p className="text-text-secondary text-sm">No channels found</p>
+              <p className="text-text-secondary text-sm">
+                {debouncedCategorySearch
+                  ? `No channels match "${debouncedCategorySearch}"`
+                  : 'No channels found'}
+              </p>
             </div>
           ) : (
-            <div style={{ height: channelVirtualizer.getTotalSize(), position: 'relative' }}>
+            <div key={activeGroup || 'all'} className="transition-opacity duration-200" style={{ height: channelVirtualizer.getTotalSize(), position: 'relative' }}>
               {channelVirtualizer.getVirtualItems().map((virtualRow) => {
                 const ch = sortedChannels[virtualRow.index];
                 if (!ch) return null;
@@ -493,7 +556,7 @@ const LiveTV: React.FC = () => {
                       isActive={currentChannel?.id === ch.id}
                       showLogos={showLogos}
                       showNumbers={showNumbers}
-                      epg={epgData[ch.tvg_id] || null}
+                      epg={enrichEpg(epgData[ch.tvg_id] || null)}
                       onSelect={setCurrentChannel}
                       onToggleFavorite={handleToggleFavorite}
                     />
@@ -565,49 +628,16 @@ const LiveTV: React.FC = () => {
             </button>
           </div>
         ) : currentChannel ? (
-          <div className="flex-1 flex flex-col">
-            <div className="aspect-video w-full bg-black flex-shrink-0">
-              <VideoPlayer />
+            <div className="flex-1 flex flex-col">
+              <div className="aspect-video w-full bg-black flex-shrink-0">
+                <VideoPlayer />
+              </div>
+              <NowPlayingPanel
+                channel={currentChannel}
+                epg={currentEpg}
+                onToggleFavorite={() => handleToggleFavorite(currentChannel)}
+              />
             </div>
-            <div className="flex-1 px-6 py-4 bg-bg-base overflow-y-auto">
-              <h3 className="text-[11px] uppercase tracking-wider text-text-tertiary font-semibold mb-3">
-                CURRENT PROGRAM
-              </h3>
-              {currentEpg?.now ? (
-                <div>
-                  <p className="text-sm font-medium text-white">{currentEpg.now.title}</p>
-                  {currentEpg.now.description && (
-                    <p className="text-xs text-text-tertiary mt-1 line-clamp-2">{currentEpg.now.description}</p>
-                  )}
-                  <p className="text-xs text-text-tertiary mt-2">
-                    {new Date().toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                    , {new Date().toLocaleDateString('en-US', { weekday: 'long' })}
-                  </p>
-                  {currentEpg.next && (
-                    <div className="mt-3 pt-3 border-t border-border-subtle">
-                      <p className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1">Next</p>
-                      <p className="text-xs text-text-secondary">{currentEpg.next.title}</p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  <p className="text-xs text-text-tertiary">No program information available</p>
-                  <p className="text-xs text-text-tertiary mt-2">
-                    {new Date().toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center bg-black text-center px-8">
             <div className="w-20 h-20 rounded-2xl bg-bg-elevated/30 flex items-center justify-center mb-5">

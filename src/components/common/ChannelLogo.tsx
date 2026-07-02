@@ -35,12 +35,14 @@ interface ChannelLogoProps {
 const ChannelLogo: React.FC<ChannelLogoProps> = React.memo(({ name, logo, size = 40, className = '' }) => {
   const [failed, setFailed] = useState(false);
   const [imgSrc, setImgSrc] = useState('');
+  const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const objUrlRef = useRef<string>('');
 
   useEffect(() => {
-    if (!logo) { setImgSrc(''); return; }
+    if (!logo) { setImgSrc(''); setLoading(false); return; }
     setFailed(false);
+    setLoading(true);
     const el = ref.current;
     if (!el) return;
 
@@ -56,7 +58,7 @@ const ChannelLogo: React.FC<ChannelLogoProps> = React.memo(({ name, logo, size =
         } else {
           setFailed(true);
         }
-      });
+      }).finally(() => setLoading(false));
       return;
     }
 
@@ -69,7 +71,7 @@ const ChannelLogo: React.FC<ChannelLogoProps> = React.memo(({ name, logo, size =
           } else {
             setFailed(true);
           }
-        });
+        }).finally(() => setLoading(false));
         obs.disconnect();
       }
     }, { rootMargin: '200px' });
@@ -100,14 +102,18 @@ const ChannelLogo: React.FC<ChannelLogoProps> = React.memo(({ name, logo, size =
 
   return (
     <div ref={ref}
-      className={`flex items-center justify-center overflow-hidden ${className}`}
+      className={`flex items-center justify-center overflow-hidden ${className} ${loading ? 'animate-pulse' : ''}`}
       style={{ width: size, height: size, borderRadius: Math.max(4, size * 0.22), background: 'var(--bg-elevated)' }}
     >
+      {loading && (
+        <div className="w-full h-full bg-white/5" />
+      )}
       {imgSrc ? (
         <img src={imgSrc} alt={name}
-          className="max-w-full max-h-full object-contain"
+          className={`max-w-full max-h-full object-contain ${loading ? 'hidden' : ''}`}
           style={{ width: size * 0.85, height: size * 0.85 }}
           onError={() => setFailed(true)}
+          loading="lazy"
         />
       ) : null}
     </div>

@@ -41,16 +41,16 @@ const CategoryPanel: React.FC<CategoryPanelProps> = ({ category, channels, onClo
               {channels.map((ch, idx) => (
                 <div key={ch.id}
                   onClick={() => onPlay(ch)}
-                  className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-white/5 cursor-pointer group transition-colors"
+                  className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-white/5 cursor-pointer group transition-colors"
                 >
-                  <span className="text-text-tertiary text-xs w-6 font-mono flex-shrink-0">{idx + 1}</span>
+                  <span className="text-text-tertiary text-xs w-6 font-mono flex-shrink-0 mt-1">{idx + 1}</span>
                   <ChannelLogo name={ch.tvg_name} logo={ch.tvg_logo} size={48} className="rounded-lg flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate group-hover:text-white">{ch.tvg_name}</p>
-                    <p className="text-xs text-text-tertiary truncate">{ch.group_title}</p>
+                    <p title={ch.tvg_name} className="text-sm font-medium leading-snug break-words group-hover:text-white">{ch.tvg_name}</p>
+                    <p className="text-xs text-text-tertiary leading-snug break-words mt-0.5">{ch.group_title}</p>
                   </div>
-                  {ch.is_favorite === 1 && <Heart size={14} weight="fill" className="text-state-error flex-shrink-0" />}
-                  <Play size={16} className="text-text-tertiary opacity-0 group-hover:opacity-100 group-hover:text-white flex-shrink-0" />
+                  {ch.is_favorite === 1 && <Heart size={14} weight="fill" className="text-state-error flex-shrink-0 mt-1" />}
+                  <Play size={16} className="text-text-tertiary opacity-0 group-hover:opacity-100 group-hover:text-white flex-shrink-0 mt-1" />
                 </div>
               ))}
             </div>

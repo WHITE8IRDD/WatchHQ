@@ -51,7 +51,7 @@ const CategoryChips: React.FC<CategoryChipsProps> = ({ categories, activeCategor
           >
             {cat.name}
             {cat.count != null && (
-              <span className={`text-[11px] ${activeCategory === cat.name ? 'opacity-60' : 'text-text-tertiary'}`}>
+              <span className={`text-[11px] tabular-nums ${activeCategory === cat.name ? 'opacity-60' : 'text-text-tertiary'}`}>
                 {cat.count}
               </span>
             )}
@@ -63,6 +63,8 @@ const CategoryChips: React.FC<CategoryChipsProps> = ({ categories, activeCategor
           <ChevronRight size={14} />
         </button>
       )}
+      {/* Fade hint that more chips exist */}
+      <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-10 bg-gradient-to-l from-bg-base to-transparent" />
     </div>
   );
 };
