@@ -412,7 +412,7 @@ const Series: React.FC = () => {
         <button
           onClick={handleSync}
           disabled={syncing}
-          className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-xl text-sm font-medium hover:bg-white/90 transition-all disabled:opacity-50"
         >
           <ArrowClockwise size={16} className={syncing ? 'animate-spin' : ''} />
           {syncing ? 'Syncing...' : 'Sync Library'}

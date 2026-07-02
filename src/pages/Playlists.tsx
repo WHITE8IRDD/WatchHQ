@@ -187,7 +187,7 @@ const Playlists: React.FC = () => {
       {/* Main */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border-subtle">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-border-subtle">
           <div>
             <h1 className="text-2xl font-display font-bold">
               {filterType === 'all' ? 'All Playlists' : filterItems.find(f => f.key === filterType)?.label}
@@ -217,7 +217,7 @@ const Playlists: React.FC = () => {
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto px-8 py-6 max-w-[1400px] mx-auto w-full">
           {filtered.length === 0 ? (
             <EmptyState
               icon={Folder}
@@ -237,7 +237,7 @@ const Playlists: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.2 }}
-                    className="group flex items-center gap-4 bg-bg-elevated border border-border-subtle hover:border-border-strong rounded-xl p-4 transition-colors"
+                    className="group flex items-center gap-4 bg-white/[0.03] border border-white/5 hover:border-white/10 rounded-xl p-4 transition-all"
                   >
                     {/* Type icon */}
                     <div className="w-11 h-11 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
@@ -301,6 +301,20 @@ const Playlists: React.FC = () => {
                   </motion.div>
                 ))}
               </AnimatePresence>
+
+              {/* Add another source card */}
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="w-full flex items-center gap-4 p-4 border-2 border-dashed border-white/10 rounded-xl hover:border-accent/30 hover:bg-accent/[0.02] transition-all text-left group"
+              >
+                <div className="w-11 h-11 rounded-lg bg-white/[0.03] flex items-center justify-center flex-shrink-0 group-hover:bg-accent/5 transition-colors">
+                  <Plus size={20} className="text-text-tertiary group-hover:text-accent transition-colors" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-secondary group-hover:text-white transition-colors">Add another source</p>
+                  <p className="text-xs text-text-tertiary mt-0.5">M3U, Xtream Codes, or Stalker Portal</p>
+                </div>
+              </button>
             </div>
           )}
         </div>

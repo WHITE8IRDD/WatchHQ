@@ -128,7 +128,7 @@ const History: React.FC = () => {
           </p>
           <Link
             to="/live"
-            className="px-5 py-2.5 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all"
+            className="px-5 py-2.5 bg-white text-black rounded-xl text-sm font-medium hover:bg-white/90 transition-all"
           >
             Start watching
           </Link>

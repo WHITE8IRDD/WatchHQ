@@ -293,7 +293,7 @@ const AddPlaylistModal: React.FC<AddPlaylistModalProps> = ({ onClose }) => {
               <button
                 type="submit"
                 disabled={submitting || (!hasM3uInput && activeTab === 'm3u')}
-                className="flex-1 py-3 rounded-xl bg-white text-black font-medium hover:bg-accent-hover transition-all text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 py-3 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-all text-sm disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {submitting ? (
                   <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />

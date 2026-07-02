@@ -16,8 +16,8 @@ export default {
           strong: 'rgba(255,255,255,0.16)',
         },
         accent: {
-          DEFAULT: '#FFFFFF',
-          hover: '#F5F5F7',
+          DEFAULT: '#22C55E',
+          hover: '#1EA84E',
         },
         gold: {
           DEFAULT: '#FFD60A',

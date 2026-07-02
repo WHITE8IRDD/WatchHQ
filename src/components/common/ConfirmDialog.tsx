@@ -50,7 +50,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             <button
               onClick={onConfirm}
               className={`flex-1 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                variant === 'danger' ? 'bg-state-error text-white hover:bg-state-error/80' : 'bg-white text-black hover:bg-accent-hover'
+                variant === 'danger' ? 'bg-state-error text-white hover:bg-state-error/80' : 'bg-white text-black hover:bg-white/90'
               }`}
             >
               {confirmLabel}

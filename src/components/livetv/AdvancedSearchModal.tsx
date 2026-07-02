@@ -150,7 +150,7 @@ const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({ open, onClose
               </button>
               <button
                 onClick={handleApply}
-                className="px-5 py-2 rounded-xl bg-white text-black text-sm font-medium hover:bg-accent-hover transition-colors"
+                className="px-5 py-2 rounded-xl bg-white text-black text-sm font-medium hover:bg-white/90 transition-colors"
               >
                 Apply filters
               </button>

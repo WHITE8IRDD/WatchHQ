@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Play, Clock, Film, ListVideo, ChevronLeft, ChevronRight, Tv, Info, RefreshCw, Trash2 } from 'lucide-react';
+import { Play, Clock, Film, ListVideo, ChevronLeft, ChevronRight, Tv, Info, RefreshCw, Trash2, Clapperboard, Heart } from 'lucide-react';
 import { toast } from '../components/common/Toast';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
@@ -34,6 +34,9 @@ const Dashboard: React.FC = () => {
   const [recentlyWatched, setRecentlyWatched] = useState<WatchHistoryEntry[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [recentlyAdded, setRecentlyAdded] = useState<any[]>([]);
+  const [vodCount, setVodCount] = useState(0);
+  const [seriesCount, setSeriesCount] = useState(0);
+  const [totalChannels, setTotalChannels] = useState(0);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
@@ -53,11 +56,14 @@ const Dashboard: React.FC = () => {
         setPlaylists(pl || []);
         if (pl && pl.length > 0) {
           const id = pl[0].id;
+          setTotalChannels(pl.reduce((sum: number, p: any) => sum + (p.channel_count || 0), 0));
           try {
             const [vod, series] = await Promise.all([
               withTimeout(window.electronAPI.getVod(id)),
               withTimeout(window.electronAPI.getSeries(id)),
             ]);
+            setVodCount(vod?.length || 0);
+            setSeriesCount(series?.length || 0);
             const combined = [
               ...(vod || []).map((v: VodItem) => ({ ...v, _type: 'vod' })),
               ...(series || []).map((s: SeriesItem) => ({ ...s, _type: 'series', icon: s.cover })),
@@ -109,7 +115,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="p-6 pt-10 max-w-7xl mx-auto space-y-8">
+    <div className="px-8 py-6 max-w-[1400px] mx-auto space-y-6">
       {/* Hero Banner */}
       {heroItem ? (
         <motion.div
@@ -168,6 +174,54 @@ const Dashboard: React.FC = () => {
             </Link>
           </div>
         </motion.div>
+      )}
+
+      {/* Stat strip */}
+      {playlists.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: 'Channels', value: totalChannels.toLocaleString(), icon: Tv },
+            { label: 'Movies', value: vodCount.toLocaleString(), icon: Film },
+            { label: 'Series', value: seriesCount.toLocaleString(), icon: Clapperboard },
+            { label: 'Sources', value: playlists.length.toLocaleString(), icon: ListVideo },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-white/[0.03] border border-white/5 rounded-xl p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                <stat.icon size={18} className="text-accent" />
+              </div>
+              <div>
+                <p className="text-2xl font-display font-bold tracking-tight">{stat.value}</p>
+                <p className="text-xs text-text-tertiary">{stat.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Quick jump tiles */}
+      {playlists.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Link to="/live" className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:bg-white/[0.06] hover:border-white/10 transition-all group">
+            <Tv size={24} className="text-accent mb-2" />
+            <p className="text-sm font-semibold">Live TV</p>
+            <p className="text-xs text-text-tertiary mt-0.5">{totalChannels.toLocaleString()} channels</p>
+          </Link>
+          <Link to="/movies" className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:bg-white/[0.06] hover:border-white/10 transition-all group">
+            <Film size={24} className="text-accent mb-2" />
+            <p className="text-sm font-semibold">Movies</p>
+            <p className="text-xs text-text-tertiary mt-0.5">{vodCount.toLocaleString()} titles</p>
+          </Link>
+          <Link to="/series" className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:bg-white/[0.06] hover:border-white/10 transition-all group">
+            <Clapperboard size={24} className="text-accent mb-2" />
+            <p className="text-sm font-semibold">Series</p>
+            <p className="text-xs text-text-tertiary mt-0.5">{seriesCount.toLocaleString()} series</p>
+          </Link>
+          <Link to="/favorites" className="bg-white/[0.03] border border-white/5 rounded-xl p-4 hover:bg-white/[0.06] hover:border-white/10 transition-all group">
+            <Heart size={24} className="text-accent mb-2" />
+            <p className="text-sm font-semibold">Favorites</p>
+            <p className="text-xs text-text-tertiary mt-0.5">Your starred content</p>
+          </Link>
+        </div>
       )}
 
       {/* Recently Watched */}

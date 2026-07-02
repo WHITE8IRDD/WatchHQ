@@ -159,19 +159,19 @@ const Favorites: React.FC = () => {
       <div className="flex gap-3">
         <button
           onClick={() => navigate('/live')}
-          className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all"
+          className="flex items-center gap-2 px-4 py-2 border border-white/20 text-white rounded-xl text-sm font-medium hover:bg-white/10 transition-all"
         >
           <Television size={16} /> Browse Channels
         </button>
         <button
           onClick={() => navigate('/movies')}
-          className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-all"
+          className="flex items-center gap-2 px-4 py-2 border border-white/20 text-white rounded-xl text-sm font-medium hover:bg-white/10 transition-all"
         >
           <FilmStrip size={16} /> Browse Movies
         </button>
         <button
           onClick={() => navigate('/series')}
-          className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-all"
+          className="flex items-center gap-2 px-4 py-2 border border-white/20 text-white rounded-xl text-sm font-medium hover:bg-white/10 transition-all"
         >
           <FilmSlate size={16} /> Browse Series
         </button>
@@ -181,7 +181,7 @@ const Favorites: React.FC = () => {
 
   return (
     <motion.div
-      className="p-8 h-full flex flex-col"
+      className="max-w-[1400px] mx-auto px-8 py-6 h-full flex flex-col"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3 }}

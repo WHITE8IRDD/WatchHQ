@@ -188,32 +188,54 @@ const Settings: React.FC = () => {
     switch (activeTab) {
       case 'general':
         return (
-          <div className="space-y-5">
-            <h3 className="font-display font-semibold text-base">General</h3>
-            <div>
-              <label className="text-xs text-text-tertiary mb-1.5 block">Grid Size</label>
-              <select value={prefValue('grid_size') || 'medium'} onChange={(e) => stagePreference('grid_size', e.target.value)}
-                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20">
-                <option value="small">Small (140px)</option>
-                <option value="medium">Medium (180px)</option>
-                <option value="large">Large (220px)</option>
-              </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-4">
+              <h3 className="font-display font-semibold text-sm text-text-secondary uppercase tracking-wider">Display</h3>
+              <div>
+                <label className="text-xs text-text-tertiary mb-1.5 block">Grid Size</label>
+                <select value={prefValue('grid_size') || 'medium'} onChange={(e) => stagePreference('grid_size', e.target.value)}
+                  className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-white/20">
+                  <option value="small">Small (140px)</option>
+                  <option value="medium">Medium (180px)</option>
+                  <option value="large">Large (220px)</option>
+                </select>
+              </div>
+              <ToggleSetting label="Show Channel Numbers" checked={prefValue('show_channel_numbers') === 1} onChange={(v) => stagePreference('show_channel_numbers', v ? 1 : 0)} />
+              <ToggleSetting label="Show Channel Logos" checked={prefValue('show_channel_logos') === 1} onChange={(v) => stagePreference('show_channel_logos', v ? 1 : 0)} />
+              <ToggleSetting label="Compact Mode" description="Smaller interface elements" checked={prefValue('compact_mode') === 1} onChange={(v) => stagePreference('compact_mode', v ? 1 : 0)} />
+              {/* Live preview */}
+              <div className="mt-3 pt-3 border-t border-white/5">
+                <p className="text-[10px] text-text-tertiary uppercase tracking-wider mb-2">Preview</p>
+                <div className="bg-bg-base rounded-lg p-2 space-y-1">
+                  {[
+                    { n: 'ESPN HD', logo: prefValue('show_channel_logos') === 1, num: prefValue('show_channel_numbers') === 1 },
+                    { n: 'CNN International', logo: prefValue('show_channel_logos') === 1, num: prefValue('show_channel_numbers') === 1 },
+                    { n: 'HBO 2', logo: prefValue('show_channel_logos') === 1, num: prefValue('show_channel_numbers') === 1 },
+                  ].map((ch, i) => (
+                    <div key={i} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/[0.03]">
+                      {ch.num && <span className="w-6 text-[10px] text-text-tertiary font-mono text-right">{101 + i}</span>}
+                      {ch.logo && <div className="w-5 h-5 rounded bg-accent/10 flex items-center justify-center flex-shrink-0"><span className="text-[7px] font-bold text-accent">{ch.n.substring(0, 2)}</span></div>}
+                      <span className={`text-[11px] ${prefValue('compact_mode') === 1 ? 'text-text-tertiary' : 'text-text-secondary'}`}>{ch.n}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div>
-              <label className="text-xs text-text-tertiary mb-1.5 block">Sort Channels By</label>
-              <select value={prefValue('sort_channels_by') || 'name'} onChange={(e) => stagePreference('sort_channels_by', e.target.value)}
-                className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full max-w-xs focus:outline-none focus:border-white/20">
-                <option value="name">Name</option>
-                <option value="number">Channel Number</option>
-                <option value="group">Category</option>
-                <option value="recent">Recently Watched</option>
-              </select>
+            <div className="bg-white/[0.03] border border-white/5 rounded-xl p-5 space-y-4">
+              <h3 className="font-display font-semibold text-sm text-text-secondary uppercase tracking-wider">Behavior</h3>
+              <div>
+                <label className="text-xs text-text-tertiary mb-1.5 block">Sort Channels By</label>
+                <select value={prefValue('sort_channels_by') || 'name'} onChange={(e) => stagePreference('sort_channels_by', e.target.value)}
+                  className="bg-bg-base border border-border-subtle rounded-xl px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-white/20">
+                  <option value="name">Name</option>
+                  <option value="number">Channel Number</option>
+                  <option value="group">Category</option>
+                  <option value="recent">Recently Watched</option>
+                </select>
+              </div>
+              <ToggleSetting label="Start Minimized" description="Launch app to system tray" checked={prefValue('start_minimized') === 1} onChange={(v) => stagePreference('start_minimized', v ? 1 : 0)} />
+              <ToggleSetting label="Debug Logging" description="Enable verbose console output" checked={prefValue('debug_logging') === 1} onChange={(v) => stagePreference('debug_logging', v ? 1 : 0)} />
             </div>
-            <ToggleSetting label="Show Channel Numbers" checked={prefValue('show_channel_numbers') === 1} onChange={(v) => stagePreference('show_channel_numbers', v ? 1 : 0)} />
-            <ToggleSetting label="Show Channel Logos" checked={prefValue('show_channel_logos') === 1} onChange={(v) => stagePreference('show_channel_logos', v ? 1 : 0)} />
-            <ToggleSetting label="Compact Mode" description="Smaller interface elements" checked={prefValue('compact_mode') === 1} onChange={(v) => stagePreference('compact_mode', v ? 1 : 0)} />
-            <ToggleSetting label="Start Minimized" description="Launch app to system tray" checked={prefValue('start_minimized') === 1} onChange={(v) => stagePreference('start_minimized', v ? 1 : 0)} />
-            <ToggleSetting label="Debug Logging" description="Enable verbose console output" checked={prefValue('debug_logging') === 1} onChange={(v) => stagePreference('debug_logging', v ? 1 : 0)} />
           </div>
         );
 
@@ -290,7 +312,7 @@ const Settings: React.FC = () => {
                 placeholder="https://example.com/xmltv.xml.gz"
                 className="flex-1 bg-bg-base border border-border-subtle rounded-xl px-4 py-2.5 text-sm text-white placeholder-text-tertiary focus:outline-none focus:border-white/20 transition-colors" />
               <button onClick={handleEpgSync} disabled={syncing || !epgUrl}
-                className="px-4 py-2.5 bg-white text-black rounded-xl text-sm font-medium hover:bg-accent-hover transition-all disabled:opacity-40 flex items-center gap-2">
+                className="px-4 py-2.5 bg-white text-black rounded-xl text-sm font-medium hover:bg-white/90 transition-all disabled:opacity-40 flex items-center gap-2">
                 {syncing ? <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" /> : 'Import'}
               </button>
             </div>
@@ -412,7 +434,7 @@ const Settings: React.FC = () => {
 
       {/* Right content pane */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-8 pb-24">
+        <div className="max-w-[1400px] mx-auto px-8 py-6 pb-24">
           {renderTabContent()}
         </div>
       </div>
@@ -473,7 +495,7 @@ const ToggleSetting: React.FC<{ label: string; description?: string; checked: bo
       </div>
     )}
     <button onClick={() => onChange(!checked)}
-      className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${label || description ? 'ml-3' : ''} ${checked ? 'bg-white' : 'bg-white/10'}`}>
+      className={`w-10 h-6 rounded-full transition-colors relative flex-shrink-0 ${label || description ? 'ml-3' : ''} ${checked ? 'bg-accent' : 'bg-white/10'}`}>
       <span className={`absolute top-1 w-4 h-4 rounded-full bg-black transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'}`} />
     </button>
   </div>

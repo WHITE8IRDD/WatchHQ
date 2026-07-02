@@ -20,9 +20,9 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
   const iconClass = ({ isActive }: { isActive: boolean }) =>
-    `w-10 h-10 mx-auto rounded-xl flex items-center justify-center transition-colors ${
+    `relative w-10 h-10 mx-auto rounded-xl flex items-center justify-center transition-colors ${
       isActive
-        ? 'bg-white/10 text-white'
+        ? 'bg-accent/15 text-accent'
         : 'text-text-tertiary hover:text-white hover:bg-white/5'
     }`;
 
@@ -30,7 +30,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
     <Tooltip.Provider delayDuration={300}>
       <aside className="fixed left-0 top-0 h-full w-[60px] bg-bg-elevated border-r border-border-subtle z-50 flex flex-col items-center py-4 gap-1">
         <div className="w-9 h-9 flex items-center justify-center flex-shrink-0 mb-2">
-          <span className="text-white/30 font-display font-bold tracking-tight text-lg">W</span>
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent to-emerald-400 flex items-center justify-center shadow-lg shadow-accent/20">
+            <span className="text-black font-bold text-sm font-display">W</span>
+          </div>
         </div>
 
         {/* Top group: Home, Playlists, Favorites, History */}
@@ -39,7 +41,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
             <Tooltip.Trigger asChild>
               <NavLink to="/" className={iconClass}>
                 {({ isActive }) => (
-                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }} className="relative flex items-center justify-center w-full h-full">
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />}
                     <Home size={20} />
                   </motion.div>
                 )}
@@ -52,7 +55,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
             <Tooltip.Trigger asChild>
               <NavLink to="/playlists" className={iconClass}>
                 {({ isActive }) => (
-                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }} className="relative flex items-center justify-center w-full h-full">
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />}
                     <ListVideo size={20} />
                   </motion.div>
                 )}
@@ -65,7 +69,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
             <Tooltip.Trigger asChild>
               <NavLink to="/favorites" className={iconClass}>
                 {({ isActive }) => (
-                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }} className="relative flex items-center justify-center w-full h-full">
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />}
                     <Heart size={20} />
                   </motion.div>
                 )}
@@ -78,7 +83,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
             <Tooltip.Trigger asChild>
               <NavLink to="/history" className={iconClass}>
                 {({ isActive }) => (
-                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }} className="relative flex items-center justify-center w-full h-full">
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />}
                     <Clock size={20} />
                   </motion.div>
                 )}
@@ -96,7 +102,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
             <Tooltip.Trigger asChild>
               <NavLink to="/movies" className={iconClass}>
                 {({ isActive }) => (
-                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }} className="relative flex items-center justify-center w-full h-full">
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />}
                     <Film size={20} />
                   </motion.div>
                 )}
@@ -109,7 +116,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
             <Tooltip.Trigger asChild>
               <NavLink to="/live" className={iconClass}>
                 {({ isActive }) => (
-                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }} className="relative flex items-center justify-center w-full h-full">
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />}
                     <Tv size={20} />
                   </motion.div>
                 )}
@@ -122,7 +130,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
             <Tooltip.Trigger asChild>
               <NavLink to="/series" className={iconClass}>
                 {({ isActive }) => (
-                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }} className="relative flex items-center justify-center w-full h-full">
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />}
                     <Clapperboard size={20} />
                   </motion.div>
                 )}
@@ -154,7 +163,8 @@ const Sidebar: React.FC<SidebarProps> = ({ onOpenPalette }) => {
             <Tooltip.Trigger asChild>
               <NavLink to="/settings" className={iconClass}>
                 {({ isActive }) => (
-                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }}>
+                  <motion.div whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} transition={{ type: 'spring', stiffness: 400, damping: 17 }} className="relative flex items-center justify-center w-full h-full">
+                    {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent rounded-r-full" />}
                     <Settings size={20} />
                   </motion.div>
                 )}
