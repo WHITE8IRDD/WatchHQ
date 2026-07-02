@@ -55,6 +55,17 @@
     if (e.key === 'F9') (window as any).__dump();
   });
 
+  (window as any).__probeState = { queueLen: 0, destroyed: false, sbUpdating: false, msReady: false, fetchStarted: false, dataReceived: 0, canplay: false, playing: false };
+
+  // Capture console errors
+  const origErr = console.error;
+  (window as any).__consoleErrors = [];
+  console.error = function (...args: any[]) {
+    (window as any).__consoleErrors!.push(args.map(String).join(' '));
+    if ((window as any).__consoleErrors!.length > 500) (window as any).__consoleErrors!.shift();
+    origErr.apply(console, args);
+  };
+
   (window as any).__attachHUD = function (video: HTMLVideoElement) {
     if (document.getElementById('__probe_hud')) return;
     const hud = document.createElement('div');
