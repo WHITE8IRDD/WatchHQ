@@ -7,25 +7,7 @@ import CategoryChips from '../components/common/CategoryChips';
 import EmptyState from '../components/common/EmptyState';
 import { useDebounce } from '../hooks/useDebounce';
 import { toast } from '../components/common/Toast';
-
-interface VodItem {
-  id: string;
-  playlist_id: string;
-  name: string;
-  icon: string;
-  category_name: string;
-  rating: string;
-  rating_5based: number;
-  url: string;
-  plot: string;
-  genre: string;
-  release_date: string;
-  duration: string;
-  director: string;
-  cast_members: string;
-  year: number;
-  is_favorite: number;
-}
+import type { VodItem } from '@/types/electron';
 
 function withTimeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
   return Promise.race([

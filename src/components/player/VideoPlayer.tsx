@@ -6,6 +6,7 @@ import ChannelLogo from '../common/ChannelLogo';
 import { Play, Pause, SpeakerHigh, SpeakerX, ArrowsOut, ArrowsIn, PictureInPicture, GearSix, Heart, SkipBack, SkipForward, ArrowClockwise } from '@phosphor-icons/react';
 import { toast } from '../common/Toast';
 import { findSimilarChannels } from '../../lib/channelSimilarity';
+import { Fmp4Player } from '../../lib/fmp4Player';
 
 const PLAYBACK_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -49,6 +50,7 @@ const VideoPlayer: React.FC = () => {
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<mpegts.Player | null>(null);
+  const fmp4PlayerRef = useRef<Fmp4Player | null>(null);
   const firstFrameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const firstFrameRef = useRef(false);
@@ -56,7 +58,9 @@ const VideoPlayer: React.FC = () => {
   const userPausedRef = useRef(false);
   const failedChannelsRef = useRef<Set<string>>(new Set());
   const failoverAttemptsRef = useRef(0);
+  const streamStartedAtRef = useRef(0);
   const MAX_FAILOVER_ATTEMPTS = 3;
+  const lastFailoverAtRef = useRef(0);
 
   const currentChannel = usePlaylistStore((s) => s.currentChannel);
   const channels = usePlaylistStore((s) => s.channels);
@@ -102,6 +106,10 @@ const VideoPlayer: React.FC = () => {
       try { mpegtsRef.current.destroy(); } catch {}
       mpegtsRef.current = null;
     }
+    if (fmp4PlayerRef.current) {
+      try { fmp4PlayerRef.current.destroy(); } catch {}
+      fmp4PlayerRef.current = null;
+    }
     if (firstFrameTimerRef.current) {
       clearTimeout(firstFrameTimerRef.current);
       firstFrameTimerRef.current = null;
@@ -132,6 +140,7 @@ const VideoPlayer: React.FC = () => {
   const markFirstFrame = useCallback(() => {
     if (firstFrameRef.current || cancelledRef.current) return;
     firstFrameRef.current = true;
+    streamStartedAtRef.current = Date.now();
     if (firstFrameTimerRef.current) {
       clearTimeout(firstFrameTimerRef.current);
       firstFrameTimerRef.current = null;
@@ -207,28 +216,18 @@ const VideoPlayer: React.FC = () => {
           const hls = new Hls({
             enableWorker: true,
             lowLatencyMode: false,
-            backBufferLength: 120,
+            backBufferLength: 90,
             maxBufferLength: 30,
-            maxMaxBufferLength: 300,
-            maxBufferSize: 100 * 1000 * 1000,
-            maxBufferHole: 1.0,
-            liveSyncDurationCount: 6,
-            liveMaxLatencyDurationCount: 20,
+            maxMaxBufferLength: 60,
+            maxBufferSize: 60 * 1000 * 1000,
+            maxBufferHole: 0.5,
+            liveSyncDurationCount: 3,
             liveDurationInfinity: true,
-            startLevel: -1,
-            capLevelToPlayerSize: false,
-            abrEwmaDefaultEstimate: 10000000,
-            abrBandWidthFactor: 0.9,
-            abrBandWidthUpFactor: 0.5,
             manifestLoadingTimeOut: 20000,
-            manifestLoadingMaxRetry: 6,
-            manifestLoadingRetryDelay: 500,
-            levelLoadingTimeOut: 20000,
-            levelLoadingMaxRetry: 6,
+            manifestLoadingMaxRetry: 4,
             fragLoadingTimeOut: 30000,
-            fragLoadingMaxRetry: 15,
-            fragLoadingRetryDelay: 500,
-            fragLoadingMaxRetryTimeout: 8000,
+            fragLoadingMaxRetry: 6,
+            xhrSetup: (xhr) => xhr.setRequestHeader('User-Agent', 'VLC/3.0.20 LibVLC/3.0.20'),
           });
           hls.on(Hls.Events.ERROR, async (_event, data) => {
             if (!data.fatal) return;
@@ -256,6 +255,9 @@ const VideoPlayer: React.FC = () => {
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
             video.play().catch(() => {});
           });
+          hls.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+            console.log('[HLS] Level loaded — live sync:', hls.liveSyncPosition?.toFixed(2), 'current:', video.currentTime.toFixed(2), 'details:', data.details.live, 'totalduration:', data.details.totalduration);
+          });
           hls.loadSource(streamUrl);
           hls.attachMedia(video);
           hlsRef.current = hls;
@@ -267,50 +269,79 @@ const VideoPlayer: React.FC = () => {
           setIsBuffering(false);
         }
       } else if (engine === 'mpegts') {
-        if (mpegts.getFeatureList().mseLivePlayback) {
-          const player = mpegts.createPlayer(
-            { type: 'mpegts', isLive: true, url: streamUrl, cors: true },
-            {
-              enableWorker: true,
-              enableStashBuffer: true,
-              stashInitialSize: 512 * 1024,
-              autoCleanupSourceBuffer: true,
-              autoCleanupMaxBackwardDuration: 120,
-              autoCleanupMinBackwardDuration: 60,
-              fixAudioTimestampGap: true,
-              reuseRedirectedURL: true,
-              liveBufferLatencyChasing: false,
-              liveBufferLatencyMaxLatency: 20,
-              liveBufferLatencyMinRemain: 3,
-              lazyLoad: false,
-              deferLoadAfterSourceOpen: false,
-              seekType: 'range',
-              headers: { 'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20' },
-            },
-          );
-          player.on(mpegts.Events.ERROR, async (type: string, detail: string) => {
-            if (cancelledRef.current) return;
-            if (!firstFrameRef.current && failoverAttemptsRef.current < MAX_FAILOVER_ATTEMPTS) {
-              const switched = await tryFailover();
-              if (switched) return;
-            }
-            if (detail?.includes('codec') || detail?.includes('MediaSource')) {
-              const switched = await tryFailover();
-              if (switched) return;
-            }
-            if (!cancelledRef.current) {
-              setError('Playback failed');
-              setIsBuffering(false);
-              destroyEngines();
-            }
-          });
-          player.attachMediaElement(video);
-          player.load();
-          player.play();
-          mpegtsRef.current = player;
-        } else {
-          video.src = streamUrl;
-          video.play().catch(() => {});
+        // Try fMP4 remux first (ffmpeg rewrites timestamps → no rewind)
+        try {
+          const proxyPort = await (window as any).electronAPI?.getStreamProxyPort();
+          if (proxyPort) {
+            const remuxUrl = `http://127.0.0.1:${proxyPort}/remux/${encodeURIComponent(url)}`;
+            console.log('[Player] Using fMP4 remux for:', url.substring(0, 80));
+            const fmp4 = new Fmp4Player(video, remuxUrl, {
+              onFirstFrame: () => {
+                markFirstFrame();
+                video.play().catch(() => {});
+              },
+              onError: (err) => {
+                console.error('[Player] fMP4 error, falling back to mpegts.js:', err.message);
+                fmp4PlayerRef.current = null;
+                fallbackToMpegts();
+              },
+            });
+            fmp4PlayerRef.current = fmp4;
+            await fmp4.load().catch((err) => {
+              console.error('[Player] fMP4 load failed, falling back:', err.message);
+              fmp4PlayerRef.current = null;
+              fallbackToMpegts();
+            });
+          } else {
+            fallbackToMpegts();
+          }
+        } catch {
+          fallbackToMpegts();
+        }
+
+        function fallbackToMpegts() {
+          if (cancelledRef.current || !video) return;
+          if (mpegts.getFeatureList().mseLivePlayback) {
+            console.log('[Player] Falling back to mpegts.js for:', url.substring(0, 80));
+            const player = mpegts.createPlayer(
+              { type: 'mpegts', isLive: true, url: streamUrl },
+              {
+                enableWorker: false,
+                enableStashBuffer: false,
+                liveBufferLatencyChasing: false,
+                liveBufferLatencyChasingOnPaused: false,
+                autoCleanupSourceBuffer: true,
+                autoCleanupMaxBackwardDuration: 30,
+                autoCleanupMinBackwardDuration: 20,
+                fixAudioTimestampGap: false,
+                reuseRedirectedURL: true,
+                lazyLoad: false,
+              },
+            );
+            player.on(mpegts.Events.ERROR, async (type: string, detail: string) => {
+              if (cancelledRef.current) return;
+              if (!firstFrameRef.current && failoverAttemptsRef.current < MAX_FAILOVER_ATTEMPTS) {
+                const switched = await tryFailover();
+                if (switched) return;
+              }
+              if (detail?.includes('codec') || detail?.includes('MediaSource')) {
+                const switched = await tryFailover();
+                if (switched) return;
+              }
+              if (!cancelledRef.current) {
+                setError('Playback failed');
+                setIsBuffering(false);
+                destroyEngines();
+              }
+            });
+            player.attachMediaElement(video);
+            player.load();
+            player.play();
+            mpegtsRef.current = player;
+          } else {
+            video.src = streamUrl;
+            video.play().catch(() => {});
+          }
         }
       } else {
         video.src = streamUrl;
@@ -346,7 +377,7 @@ const VideoPlayer: React.FC = () => {
         try { video.removeAttribute('src'); video.load(); } catch {}
       }
     };
-  }, [currentChannel, initPlayback, destroyEngines]);
+  }, [currentChannel?.id, currentChannel?.url]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -584,9 +615,16 @@ const VideoPlayer: React.FC = () => {
     if (!currentChannel) return false;
     if (failoverAttemptsRef.current >= MAX_FAILOVER_ATTEMPTS) return false;
 
+    const sinceLast = Date.now() - lastFailoverAtRef.current;
+    if (sinceLast < 30000) return false;
+
+    const uptime = Date.now() - streamStartedAtRef.current;
+    if (uptime < 30000) return false;
+
     const prefs = await (window as any).electronAPI?.getPreferences().catch(() => null);
     if (prefs?.auto_failover === 0) return false;
 
+    lastFailoverAtRef.current = Date.now();
     failedChannelsRef.current.add(currentChannel.id);
     failoverAttemptsRef.current++;
 
@@ -680,40 +718,7 @@ const VideoPlayer: React.FC = () => {
     return () => clearInterval(checker);
   }, [currentChannel]);
 
-  // Auto-resume watchdog — silent pause recovery, NO currentTime nudging
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !currentChannel) return;
-    let waitingSince = 0;
-    const onPause = () => {
-      if (userPausedRef.current) return;
-      setTimeout(() => {
-        if (video.paused && !userPausedRef.current && document.visibilityState === 'visible') {
-          video.play().catch(() => {});
-        }
-      }, 250);
-    };
-    const onWaiting = () => { waitingSince = Date.now(); };
-    const onPlaying = () => { waitingSince = 0; };
-    const watchdog = setInterval(() => {
-      if (userPausedRef.current) return;
-      if (video.paused) { video.play().catch(() => {}); return; }
-      // Only act on 10+ second true stall — no currentTime manipulation
-      if (waitingSince > 0 && Date.now() - waitingSince > 10000) {
-        if (hlsRef.current) { try { hlsRef.current.startLoad(-1); } catch {} }
-        waitingSince = Date.now();
-      }
-    }, 2000);
-    video.addEventListener('pause', onPause);
-    video.addEventListener('waiting', onWaiting);
-    video.addEventListener('playing', onPlaying);
-    return () => {
-      clearInterval(watchdog);
-      video.removeEventListener('pause', onPause);
-      video.removeEventListener('waiting', onWaiting);
-      video.removeEventListener('playing', onPlaying);
-    };
-  }, [currentChannel]);
+
 
   // Reset failover state when user picks a new channel
   useEffect(() => {
@@ -737,6 +742,47 @@ const VideoPlayer: React.FC = () => {
     const handlers = events.map(e => { const h = log(e); v.addEventListener(e, h); return [e, h] as const; });
     return () => handlers.forEach(([e, h]) => v.removeEventListener(e, h));
   }, [currentChannel]);
+
+  // Mount-time reset for failover tracking
+  useEffect(() => {
+    failedChannelsRef.current = new Set();
+    failoverAttemptsRef.current = 0;
+  }, []);
+
+  // Passive rewind detector — reads only, never writes, never patches
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !currentChannel) return;
+
+    let lastCurrentTime = 0;
+    let lastMediaTime = 0;
+    let rewindCount = 0;
+    const startAt = Date.now();
+
+    const iv = setInterval(() => {
+      const t = v.currentTime;
+      if (lastCurrentTime > 0 && t < lastCurrentTime - 0.05) {
+        rewindCount++;
+        console.error(`\uD83D\uDD34 REWIND #${rewindCount}: currentTime ${lastCurrentTime.toFixed(3)} \u2192 ${t.toFixed(3)} (elapsed ${((Date.now()-startAt)/1000).toFixed(1)}s)`);
+      }
+      lastCurrentTime = t;
+    }, 50);
+
+    if ('requestVideoFrameCallback' in v) {
+      const monitor = (_now: number, metadata: any) => {
+        const mt = metadata.mediaTime;
+        if (lastMediaTime > 0 && mt < lastMediaTime - 0.05) {
+          rewindCount++;
+          console.error(`\uD83D\uDD34 FRAME REWIND #${rewindCount}: mediaTime ${lastMediaTime.toFixed(3)} \u2192 ${mt.toFixed(3)} (frame ${metadata.presentedFrames})`);
+        }
+        lastMediaTime = mt;
+        (v as any).requestVideoFrameCallback(monitor);
+      };
+      (v as any).requestVideoFrameCallback(monitor);
+    }
+
+    return () => clearInterval(iv);
+  }, [currentChannel?.id]);
 
   if (!currentChannel) {
     return (
@@ -1056,4 +1102,4 @@ const VideoPlayer: React.FC = () => {
   );
 };
 
-export default VideoPlayer;
+export default React.memo(VideoPlayer);

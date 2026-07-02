@@ -1,7 +1,7 @@
 // src/types/electron.d.ts
 export {};
 
-interface EpgProgram {
+export interface EpgProgram {
   id: string;
   tvg_id: string;
   title: string;
@@ -13,7 +13,7 @@ interface EpgProgram {
   lang?: string;
 }
 
-interface WatchHistoryEntry {
+export interface WatchHistoryEntry {
   id: string;
   item_type: 'channel' | 'vod' | 'series_episode';
   item_id: string;
@@ -28,7 +28,7 @@ interface WatchHistoryEntry {
   watch_count: number;
 }
 
-interface Playlist {
+export interface Playlist {
   id: string;
   name: string;
   type: 'm3u' | 'xtream' | 'stalker';
@@ -46,7 +46,7 @@ interface Playlist {
   updated_at: number;
 }
 
-interface Channel {
+export interface Channel {
   id: string;
   playlist_id: string;
   stream_id?: string;
@@ -62,7 +62,7 @@ interface Channel {
   watch_count: number;
 }
 
-interface VodItem {
+export interface VodItem {
   id: string;
   playlist_id: string;
   stream_id?: string;
@@ -88,7 +88,7 @@ interface VodItem {
   watch_position: number;
 }
 
-interface SeriesItem {
+export interface SeriesItem {
   id: string;
   playlist_id: string;
   series_id: string;
@@ -112,7 +112,7 @@ interface SeriesItem {
   last_watched?: number;
 }
 
-interface SeriesEpisode {
+export interface SeriesEpisode {
   id: string;
   series_id: string;
   season: number;
@@ -128,7 +128,7 @@ interface SeriesEpisode {
   is_watched: number;
 }
 
-interface AppInfo {
+export interface AppInfo {
   version: string;
   name: string;
   dataPath: string;
@@ -139,7 +139,7 @@ interface AppInfo {
   chromeVersion: string;
 }
 
-interface UserPreferences {
+export interface UserPreferences {
   id: string;
   theme: string;
   language: string;

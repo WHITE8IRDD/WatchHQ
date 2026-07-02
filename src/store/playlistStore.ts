@@ -57,7 +57,7 @@ interface PlaylistState {
   // Async actions
   loadPlaylists: () => Promise<void>;
   loadChannels: (playlistId: string) => Promise<void>;
-  addPlaylist: (data: any) => Promise<{ success: boolean; error?: string }>;
+  addPlaylist: (data: any) => Promise<{ success: boolean; id?: string; count?: number; error?: string }>;
   deletePlaylist: (id: string) => Promise<void>;
   refreshPlaylist: (id: string) => Promise<void>;
 }

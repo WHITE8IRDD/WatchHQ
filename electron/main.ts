@@ -11,7 +11,7 @@ import { registerFavoritesHandlers } from './ipc/favorites';
 import { registerCategoryHandlers } from './ipc/categories';
 import { registerImageCacheHandlers } from './services/imageCache';
 import { initDatabase, closeDatabase, getDb } from './services/database';
-import { startStreamProxy, getProxyPort, stopStreamProxy } from './services/stream-proxy';
+import { startStreamProxy, getProxyPort, stopStreamProxy, killAllFfmpeg } from './services/stream-proxy';
 
 process.on('uncaughtException', (err) => {
   console.error('[FATAL] Uncaught exception:', err.message, err.stack);
@@ -115,6 +115,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   globalShortcut.unregisterAll();
   closeDatabase();
+  killAllFfmpeg();
   stopStreamProxy();
 });
 

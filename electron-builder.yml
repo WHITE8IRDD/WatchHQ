@@ -6,6 +6,10 @@ directories:
 files:
   - dist/**/*
   - dist-electron/**/*
+  - "!node_modules/ffmpeg-static/bin/${/*}"
+  - "node_modules/ffmpeg-static/bin/${os}/${arch}/ffmpeg${ext}"
+asarUnpack:
+  - "node_modules/ffmpeg-static/**/*"
 win:
   target:
     - nsis

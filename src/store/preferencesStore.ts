@@ -1,5 +1,6 @@
 // src/store/preferencesStore.ts
 import { create } from 'zustand';
+import type { UserPreferences } from '@/types/electron';
 
 interface PreferencesState {
   prefs: UserPreferences | null;

@@ -74,11 +74,11 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ open, onClose }) => {
           window.electronAPI.searchSeries({ playlistId: pl.id, query: q }),
         ]);
         for (const ch of (channels || []).slice(0, 8))
-          all.push({ type: 'channel', id: ch.id, title: ch.tvg_name || ch.name || '', subtitle: ch.group_title || '', icon: ch.tvg_logo || '', playlist_id: pl.id });
+          all.push({ type: 'channel', id: ch.id, title: ch.tvg_name || '', subtitle: ch.group_title || '', icon: ch.tvg_logo || '', poster: '', playlist_id: pl.id });
         for (const v of (movies || []).slice(0, 8))
-          all.push({ type: 'movie', id: v.id, title: v.name || '', subtitle: v.category_name || '', icon: v.icon || v.poster || '', poster: v.poster || v.icon || '', playlist_id: pl.id });
+          all.push({ type: 'movie', id: v.id, title: v.name || '', subtitle: v.category_name || '', icon: v.icon || '', poster: v.icon || '', playlist_id: pl.id });
         for (const s of (series || []).slice(0, 8))
-          all.push({ type: 'series', id: s.id, title: s.name || '', subtitle: s.category_name || '', icon: s.cover || s.poster || '', poster: s.cover || s.poster || '', playlist_id: pl.id });
+          all.push({ type: 'series', id: s.id, title: s.name || '', subtitle: s.category_name || '', icon: s.cover || '', poster: s.cover || '', playlist_id: pl.id });
       }
       setResults(all);
       setSelectedIdx(0);

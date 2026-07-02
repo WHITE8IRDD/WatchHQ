@@ -25,7 +25,7 @@ export function registerEpgHandlers() {
       // Detect and decompress gzipped content
       if (
         url.endsWith('.gz') ||
-        contentType.includes('gzip') ||
+        String(contentType).includes('gzip') ||
         (buffer[0] === 0x1f && buffer[1] === 0x8b)
       ) {
         xmlContent = zlib.gunzipSync(buffer).toString('utf-8');

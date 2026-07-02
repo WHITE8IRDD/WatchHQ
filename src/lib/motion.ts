@@ -1,5 +1,7 @@
 // src/lib/motion.ts
-export const easeOut = [0.16, 1, 0.3, 1];
+import type { Transition } from 'framer-motion';
+
+export const easeOut: Transition['ease'] = [0.16, 1, 0.3, 1] as any;
 export const springSmooth = { type: 'spring', stiffness: 300, damping: 30 };
 export const springSnappy = { type: 'spring', stiffness: 500, damping: 35 };
 

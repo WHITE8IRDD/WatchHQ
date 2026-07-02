@@ -5,6 +5,7 @@ import { Play, Clock, Film, ListVideo, ChevronLeft, ChevronRight, Tv, Info, Refr
 import { toast } from '../components/common/Toast';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import type { WatchHistoryEntry, Playlist, VodItem, SeriesItem } from '@/types/electron';
 
 function withTimeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
   return Promise.race([
@@ -115,9 +116,8 @@ const Dashboard: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="relative rounded-2xl overflow-hidden h-[60vh] max-h-[720px] flex items-end"
-        >
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as const }}
+          className="relative rounded-2xl overflow-hidden h-[60vh] max-h-[720px] flex items-end">
           {heroItem.icon && (
             <div className="absolute inset-0">
               <img src={heroItem.icon} alt="" className="w-full h-full object-cover blur-2xl scale-110" />
@@ -154,9 +154,8 @@ const Dashboard: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="relative rounded-2xl overflow-hidden h-[60vh] max-h-[720px] flex items-center justify-center bg-gradient-to-b from-bg-elevated to-bg-base border border-border-subtle"
-        >
+          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] as const }}
+          className="relative rounded-2xl overflow-hidden h-[60vh] max-h-[720px] flex items-center justify-center bg-gradient-to-b from-bg-elevated to-bg-base border border-border-subtle">
           <div className="text-center">
             <h1 className="text-4xl md:text-5xl font-display font-bold mb-3">Welcome to WatchHQ</h1>
             <p className="text-text-secondary text-sm mb-6">Add your first playlist to get started</p>

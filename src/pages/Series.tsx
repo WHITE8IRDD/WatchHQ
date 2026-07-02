@@ -8,34 +8,8 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import { useDebounce } from '../hooks/useDebounce';
 import { toast } from '../components/common/Toast';
-
-interface SeriesItem {
-  id: string;
-  playlist_id: string;
-  series_id: string;
-  name: string;
-  cover: string;
-  category_name: string;
-  plot: string;
-  genre: string;
-  rating: string;
-  rating_5based: number;
-  year: number;
-  season_count: number;
-  episode_count: number;
-  is_favorite: number;
-}
-
-interface Episode {
-  id: string;
-  season: number;
-  episode_num: number;
-  title: string;
-  url: string;
-  plot: string;
-  duration: string;
-  is_watched: number;
-}
+import type { SeriesItem, SeriesEpisode } from '@/types/electron';
+type Episode = SeriesEpisode;
 
 function withTimeout<T>(promise: Promise<T>, ms = 10000): Promise<T> {
   return Promise.race([
@@ -252,7 +226,7 @@ const Series: React.FC = () => {
             <h1 className="text-3xl font-bold mb-2">{selected.name}</h1>
 
             <div className="flex items-center gap-3 flex-wrap mb-4">
-              {selected.year > 0 && (
+              {(selected.year ?? 0) > 0 && (
                 <span className="text-sm text-text-secondary">{selected.year}</span>
               )}
               {selected.rating && (

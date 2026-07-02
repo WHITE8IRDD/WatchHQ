@@ -6,6 +6,8 @@ import { Link } from 'react-router-dom';
 import { toast } from '../components/common/Toast';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { staggerContainer, fadeInUp } from '../lib/motion';
+import type { WatchHistoryEntry } from '@/types/electron';
+type HistoryEntry = WatchHistoryEntry;
 
 function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   return Promise.race([
@@ -14,29 +16,18 @@ function withTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T> {
   ]);
 }
 
-interface HistoryEntry {
-  item_type: 'live' | 'vod' | 'series';
-  item_id: string;
-  title: string;
-  icon?: string;
-  url: string;
-  position_seconds: number;
-  duration_seconds: number;
-  progress_percent: number;
-  last_watched: string;
-}
-
 type DateGroup = 'today' | 'yesterday' | 'thisWeek' | 'older';
 
-function getDateGroup(date: Date): DateGroup {
+function getDateGroup(dateVal: string | number): DateGroup {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const yesterday = new Date(today.getTime() - 86400000);
   const weekAgo = new Date(today.getTime() - 6 * 86400000);
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  if (d.getTime() === today.getTime()) return 'today';
-  if (d.getTime() === yesterday.getTime()) return 'yesterday';
-  if (d >= weekAgo) return 'thisWeek';
+  const d = new Date(dateVal);
+  const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  if (dDay.getTime() === today.getTime()) return 'today';
+  if (dDay.getTime() === yesterday.getTime()) return 'yesterday';
+  if (dDay >= weekAgo) return 'thisWeek';
   return 'older';
 }
 
@@ -49,8 +40,8 @@ const groupLabels: Record<DateGroup, string> = {
 
 const groupOrder: DateGroup[] = ['today', 'yesterday', 'thisWeek', 'older'];
 
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
+function formatDateTime(dateVal: string | number): string {
+  const d = new Date(dateVal);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
@@ -140,7 +131,7 @@ const History: React.FC = () => {
   const grouped = new Map<DateGroup, HistoryEntry[]>();
   for (const g of groupOrder) grouped.set(g, []);
   for (const e of entries) {
-    const g = getDateGroup(new Date(e.last_watched));
+    const g = getDateGroup(e.last_watched);
     grouped.get(g)!.push(e);
   }
 
@@ -174,7 +165,7 @@ const History: React.FC = () => {
                   <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/5 flex items-center justify-center flex-shrink-0">
                     {entry.icon ? (
                       <img src={entry.icon} alt="" className="w-full h-full object-cover" />
-                    ) : entry.item_type === 'live' ? (
+                    ) : entry.item_type === 'channel' ? (
                       <Tv size={18} className="text-text-tertiary" />
                     ) : (
                       <Film size={18} className="text-text-tertiary" />
@@ -205,7 +196,7 @@ const History: React.FC = () => {
 
                   <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Link
-                      to={entry.item_type === 'live' ? '/live' : '/movies'}
+                      to={entry.item_type === 'channel' ? '/live' : '/movies'}
                       className="p-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
                       title="Resume"
                     >
@@ -214,7 +205,7 @@ const History: React.FC = () => {
                     <button
                       onClick={async () => {
                         try {
-                          await window.electronAPI.clearHistoryItem({ item_type: entry.item_type, item_id: entry.item_id });
+                          await window.electronAPI.deleteHistoryEntry({ item_type: entry.item_type, item_id: entry.item_id });
                           loadHistory();
                           toast.success('Removed from history');
                         } catch { toast.error('Failed to remove'); }
