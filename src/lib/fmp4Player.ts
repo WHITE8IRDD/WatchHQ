@@ -18,6 +18,7 @@ export class Fmp4Player {
     this.video = video;
     this.url = url;
     this.opts = opts;
+    console.log('[Fmp4Player] CONSTRUCTED', new Error().stack?.split('\n').slice(2, 6).join(' | '));
   }
 
   async load(): Promise<void> {
@@ -44,6 +45,7 @@ export class Fmp4Player {
     });
 
     const candidates = [
+      // AVC (H.264) — remux always transcodes to AVC
       'video/mp4; codecs="avc1.640028, mp4a.40.2"',
       'video/mp4; codecs="avc1.4D401F, mp4a.40.2"',
       'video/mp4; codecs="avc1.42E01E, mp4a.40.2"',

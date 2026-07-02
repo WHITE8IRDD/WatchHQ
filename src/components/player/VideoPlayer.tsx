@@ -61,6 +61,7 @@ const VideoPlayer: React.FC = () => {
   const streamStartedAtRef = useRef(0);
   const MAX_FAILOVER_ATTEMPTS = 3;
   const lastFailoverAtRef = useRef(0);
+  const mpegtsFallbackFnRef = useRef<(() => void) | null>(null);
 
   const currentChannel = usePlaylistStore((s) => s.currentChannel);
   const channels = usePlaylistStore((s) => s.channels);
@@ -115,6 +116,7 @@ const VideoPlayer: React.FC = () => {
       firstFrameTimerRef.current = null;
     }
     firstFrameRef.current = false;
+    mpegtsFallbackFnRef.current = null;
   }, []);
 
   const cancelPending = useCallback(() => {
@@ -134,7 +136,7 @@ const VideoPlayer: React.FC = () => {
       if (!firstFrameRef.current && !cancelledRef.current) {
         onTimeout();
       }
-    }, 8000);
+    }, 15000);
   }, []);
 
   const markFirstFrame = useCallback(() => {
@@ -174,6 +176,7 @@ const VideoPlayer: React.FC = () => {
     } catch {}
 
     cancelledRef.current = false;
+    mpegtsFallbackFnRef.current = null;
     setError(null);
     setIsBuffering(true);
     setIsPlaying(false);
@@ -202,6 +205,29 @@ const VideoPlayer: React.FC = () => {
 
     startFirstFrameTimer(async () => {
       if (cancelledRef.current) return;
+
+      // fMP4 remux timed out (e.g. HEVC codec unsupported) → fall back to mpegts.js
+      if (engine === 'mpegts' && mpegtsFallbackFnRef.current) {
+        const fn = mpegtsFallbackFnRef.current;
+        mpegtsFallbackFnRef.current = null;
+        console.log('[Player] fMP4 no first frame, falling back to mpegts.js');
+        destroyEngines();
+        // Shorter timeout for mpegts.js fallback (already waited 45s)
+        if (firstFrameTimerRef.current) clearTimeout(firstFrameTimerRef.current);
+        firstFrameTimerRef.current = setTimeout(async () => {
+          if (firstFrameRef.current || cancelledRef.current) return;
+          console.log('[Player] mpegts.js fallback timed out, trying failover');
+          const switched = await tryFailover();
+          if (!switched) {
+            setError('Playback failed');
+            setIsBuffering(false);
+            destroyEngines();
+          }
+        }, 30000);
+        fn();
+        return;
+      }
+
       const switched = await tryFailover();
       if (!switched) {
         setError('Playback failed');
@@ -300,6 +326,7 @@ const VideoPlayer: React.FC = () => {
         }
 
         function fallbackToMpegts() {
+          mpegtsFallbackFnRef.current = null;
           if (cancelledRef.current || !video) return;
           if (mpegts.getFeatureList().mseLivePlayback) {
             console.log('[Player] Falling back to mpegts.js for:', url.substring(0, 80));
@@ -343,6 +370,7 @@ const VideoPlayer: React.FC = () => {
             video.play().catch(() => {});
           }
         }
+        mpegtsFallbackFnRef.current = fallbackToMpegts;
       } else {
         video.src = streamUrl;
         video.play().catch(() => {});

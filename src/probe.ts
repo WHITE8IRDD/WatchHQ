@@ -43,6 +43,55 @@
     },
   });
 
+  // Hook SourceBuffer.appendBuffer
+  const origAppend = SourceBuffer.prototype.appendBuffer;
+  SourceBuffer.prototype.appendBuffer = function (this: SourceBuffer, data: any) {
+    push({ type: 'append', bytes: data?.byteLength || 0, updating: this.updating });
+    return origAppend.call(this, data);
+  };
+
+  // Hook SourceBuffer.remove (eviction)
+  const origRemove = SourceBuffer.prototype.remove;
+  SourceBuffer.prototype.remove = function (this: SourceBuffer, start: number, end: number) {
+    push({ type: 'remove', start: +start.toFixed(2), end: +end.toFixed(2), updating: this.updating });
+    return origRemove.call(this, start, end);
+  };
+
+  // Hook SourceBuffer.timestampOffset writes
+  const tsDesc = Object.getOwnPropertyDescriptor(SourceBuffer.prototype, 'timestampOffset');
+  if (tsDesc?.set) {
+    Object.defineProperty(SourceBuffer.prototype, 'timestampOffset', {
+      get() { return tsDesc.get!.call(this); },
+      set(v: number) {
+        push({ type: 'timestampOffset=', value: v, at: (new Error().stack || '').split('\n')[2]?.trim() });
+        tsDesc.set!.call(this, v);
+      },
+    });
+  }
+
+  // Hook video.load()
+  const origLoad = HTMLMediaElement.prototype.load;
+  HTMLMediaElement.prototype.load = function () {
+    push({ type: 'video.load()', at: (new Error().stack || '').split('\n')[2]?.trim() });
+    return origLoad.call(this);
+  };
+
+  // Hook removeAttribute('src')
+  const origRemoveAttr = HTMLMediaElement.prototype.removeAttribute;
+  HTMLMediaElement.prototype.removeAttribute = function (this: HTMLMediaElement, name: string) {
+    if (name === 'src') {
+      push({ type: 'removeAttribute(src)', at: (new Error().stack || '').split('\n')[2]?.trim() });
+    }
+    return origRemoveAttr.call(this, name);
+  };
+
+  // Hook endOfStream
+  const origEOS = MediaSource.prototype.endOfStream;
+  MediaSource.prototype.endOfStream = function (this: MediaSource, reason?: EndOfStreamError) {
+    push({ type: 'endOfStream', reason: reason || undefined, at: (new Error().stack || '').split('\n')[2]?.trim() });
+    return origEOS.call(this, reason);
+  };
+
   (window as any).__dump = () => {
     const b = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -90,6 +139,7 @@
       const se = s.length ? s.end(s.length - 1).toFixed(2) : '-';
       if (ct < last - 0.15 && !seeking) {
         rewinds++;
+        const context = log.slice(-8).map(e => ({ ms: e.ms, type: e.type, ...(e.value !== undefined ? { v: e.value } : {}) }));
         log.push({
           ms: performance.now() | 0,
           type: 'REWIND',
@@ -100,6 +150,8 @@
           bStart: bs,
           bEnd: be,
           seekEnd: se,
+          readyState: video.readyState,
+          context,
         });
         hud.style.color = '#f33';
         setTimeout(() => (hud.style.color = '#0f0'), 500);

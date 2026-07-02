@@ -1,130 +1,188 @@
 const CDP = require('chrome-remote-interface');
 const fs = require('fs');
 
-async function waitStore(client) {
+async function main() {
+  console.log('Waiting 8s for app to boot...');
+  await new Promise(r => setTimeout(r, 8000));
+  
+  const targets = await CDP.List({ port: 9222 });
+  const target = targets.find(t => t.type === 'page' && t.url && t.url.includes('localhost'));
+  if (!target) { console.error('No app page target'); process.exit(1); }
+  console.log('Target:', target.url?.slice(0, 60));
+  
+  const client = await CDP({ target });
   const { Runtime } = client;
-  for (let i = 0; i < 40; i++) {
+  await Runtime.enable();
+  
+  console.log('Navigating to Live TV...');
+  await Runtime.evaluate({ expression: `window.location.hash = '#/live'` });
+  await new Promise(r => setTimeout(r, 3000));
+  
+  console.log('Waiting for playlist store...');
+  let storeReady = false;
+  for (let i = 0; i < 30; i++) {
     const r = await Runtime.evaluate({
       expression: `window.__playlistStore ? window.__playlistStore.getState().channels.length : -1`,
       returnByValue: true,
     });
-    if (r.result.value > 0) return r.result.value;
+    if (r.result.value > 0) { storeReady = true; break; }
     await Runtime.evaluate({
       expression: `window.__playlistStore?.getState().loadPlaylists();`,
       awaitPromise: true,
     });
     await new Promise(r => setTimeout(r, 2000));
   }
-  return 0;
-}
-
-async function main() {
-  await new Promise(r => setTimeout(r, 3000));
-  const targets = await CDP.List({ port: 9222 });
-  const target = targets.find(t => t.type === 'page');
-  if (!target) { console.error('No page'); process.exit(1); }
+  if (!storeReady) { console.error('Store not ready after 60s'); process.exit(1); }
   
-  const client = await CDP({ target });
-  const { Runtime } = client;
-  await Runtime.enable();
+  console.log('Searching for 2M channel...');
   
-  // Ensure on /live
-  await Runtime.evaluate({ expression: `window.location.hash = '#/live'` });
-  await new Promise(r => setTimeout(r, 3000));
-  
-  // Wait for channels
-  const chCount = await waitStore(client);
-  console.log('Channels:', chCount);
-  if (!chCount) { console.error('No channels'); process.exit(1); }
-  
-  // Get a beIN TS channel via store (FULL object)
-  const ch = await Runtime.evaluate({
-    expression: `(() => {
-      const chs = window.__playlistStore.getState().channels;
-      const bein = chs.filter(function(c) {
-        return c.tvg_name.toLowerCase().includes('bein') && (c.url || '').includes('.ts');
-      });
-      return bein.length > 0 ? bein[0] : null;
-    })()`,
+  // Use store directly — search all channels for 2M
+  const searchResult = await Runtime.evaluate({
+    expression: `
+      (() => {
+        try {
+          const store = window.__playlistStore;
+          if (!store) return JSON.stringify({ error: 'no store' });
+          const chs = store.getState().channels;
+          if (!chs || !chs.length) return JSON.stringify({ error: 'no channels', len: 0 });
+          // Search for 2M
+          var found = null;
+          for (var i = 0; i < chs.length; i++) {
+            var c = chs[i];
+            var name = (c.tvg_name || c.name || '').toLowerCase();
+            if (name.indexOf('2m') >= 0) {
+              // Prefer non-HEVC version
+              if (name.indexOf('hevc') === -1) {
+                found = { tvg_name: c.tvg_name, url: c.url, id: c.id, name: c.name };
+                break;
+              }
+              if (!found) found = { tvg_name: c.tvg_name, url: c.url, id: c.id, name: c.name };
+            }
+          }
+          if (found) return JSON.stringify(found);
+          return JSON.stringify({ error: 'no 2M found', totalChs: chs.length });
+        } catch(e) { return JSON.stringify({ error: e.message }); }
+      })()
+    `,
     returnByValue: true,
   });
-  if (!ch.result.value) { console.error('No beIN channel'); process.exit(1); }
-  console.log('Playing:', ch.result.value.name);
+  
+  const channelInfo = JSON.parse(searchResult.result.value);
+  console.log('Channel info:', channelInfo);
+  
+  if (channelInfo.error) {
+    console.error('Failed to find 2M channel:', channelInfo.error);
+    process.exit(1);
+  }
   
   // Set channel via store
+  console.log('Setting channel:', channelInfo.tvg_name);
   await Runtime.evaluate({
-    expression: `window.__playlistStore.getState().setCurrentChannel(${JSON.stringify(ch.result.value)})`,
+    expression: `window.__playlistStore.getState().setCurrentChannel(${JSON.stringify(channelInfo)})`,
     awaitPromise: false,
   });
   
-  // Wait for video element
-  for (let i = 0; i < 20; i++) {
-    const v = await Runtime.evaluate({
-      expression: `document.querySelector('video') !== null`,
-      returnByValue: true,
-    });
-    if (v.result.value) break;
-    await new Promise(r => setTimeout(r, 1000));
-  }
-  
-  // Poll for 3 minutes
-  console.log('Monitoring for 3 minutes...');
-  const start = Date.now();
-  while (Date.now() - start < 180000) {
-    await new Promise(r => setTimeout(r, 15000));
+  // Wait up to 45s for playback to actually start
+  console.log('\n\u23f3 Waiting up to 45s for playback (currentTime > 2)...');
+  let started = false;
+  const waitStart = Date.now();
+  while (Date.now() - waitStart < 45000) {
+    await new Promise(r => setTimeout(r, 2000));
     const state = await Runtime.evaluate({
       expression: `
         (() => {
-          const log = window.__log || [];
-          const rewinds = log.filter(function(e) { return e.type === 'REWIND'; });
-          const mscount = (window.__msCount && window.__msCount()) || 0;
           const v = document.querySelector('video');
           return {
-            elapsed: ${Date.now() - start},
-            rewindCount: rewinds.length,
-            msCount: mscount,
-            currentTime: v ? v.currentTime : null,
-            currentSrc: v ? (v.currentSrc || '').slice(0, 40) : null,
-            lastRewind: rewinds.length > 0 ? rewinds[rewinds.length - 1] : null,
-            logLength: log.length,
+            currentTime: v?.currentTime || 0,
+            readyState: v?.readyState || 0,
+            src: v?.currentSrc?.slice(0, 30) || '',
+            paused: v?.paused,
           };
         })()
       `,
       returnByValue: true,
     });
-    console.log(`[${(state.result.value.elapsed/1000).toFixed(0)}s]`, JSON.stringify(state.result.value));
-    
-    // Stop early if we've captured 3+ rewinds
-    if (state.result.value.rewindCount >= 3) {
-      console.log('Captured 3+ rewinds — stopping early');
+    const s = state.result.value;
+    console.log(`  t=${s.currentTime.toFixed(2)}s ready=${s.readyState} paused=${s.paused} src=${s.src}`);
+    if (s.currentTime > 2) {
+      started = true;
+      console.log(`\n\u2705 Playback started at t=${s.currentTime.toFixed(2)}s`);
       break;
     }
   }
   
-  // Dump the full log
-  const dump = await Runtime.evaluate({
+  if (!started) {
+    console.error('\n\u274c Playback never started in 45s. Dumping log.');
+    const dump = await Runtime.evaluate({
+      expression: `JSON.stringify(window.__log || [], null, 2)`,
+      returnByValue: true,
+    });
+    fs.writeFileSync('rewind-log-nostart.json', dump.result.value);
+    const events = JSON.parse(dump.result.value);
+    console.log('\nEvent counts:');
+    const counts = {};
+    for (const e of events) counts[e.type] = (counts[e.type] || 0) + 1;
+    console.log(counts);
+    process.exit(2);
+  }
+  
+  console.log('\n\U0001f4e1 Monitoring 3 minutes with playback active...');
+  const monitorStart = Date.now();
+  let checkNum = 0;
+  while (Date.now() - monitorStart < 180000) {
+    await new Promise(r => setTimeout(r, 15000));
+    checkNum++;
+    const state = await Runtime.evaluate({
+      expression: `
+        (() => {
+          const events = window.__log || [];
+          const rewinds = events.filter(e => e.type === 'REWIND');
+          const v = document.querySelector('video');
+          return {
+            elapsed: ${Date.now() - monitorStart},
+            currentTime: v?.currentTime,
+            paused: v?.paused,
+            rewindCount: rewinds.length,
+            msCount: (window.__msCount && window.__msCount()) || 0,
+            lastRewind: rewinds[rewinds.length - 1] || null,
+          };
+        })()
+      `,
+      returnByValue: true,
+    });
+    const s = state.result.value;
+    console.log(`[${(s.elapsed/1000).toFixed(0)}s] t=${s.currentTime?.toFixed(2)} paused=${s.paused} rewinds=${s.rewindCount} msCount=${s.msCount}`);
+    if (s.lastRewind) {
+      console.log(`  last rewind: ${s.lastRewind.from} \u2192 ${s.lastRewind.to}`);
+    }
+  }
+  
+  // Final dump
+  const finalDump = await Runtime.evaluate({
     expression: `JSON.stringify(window.__log || [], null, 2)`,
     returnByValue: true,
   });
-  fs.writeFileSync('rewind-log.json', dump.result.value);
-  console.log('\n=== Log written to rewind-log.json ===');
+  fs.writeFileSync('rewind-log.json', finalDump.result.value);
+  const events = JSON.parse(finalDump.result.value);
   
-  // Summarize
-  const events = JSON.parse(dump.result.value);
   const summary = {
     totalEvents: events.length,
-    msNewCount: events.filter(function(e) { return e.type === 'MS.new'; }).length,
-    blobNewCount: events.filter(function(e) { return e.type === 'blob.new'; }).length,
-    srcAssignments: events.filter(function(e) { return e.type === 'src='; }).length,
-    rewindCount: events.filter(function(e) { return e.type === 'REWIND'; }).length,
-    seekingCount: events.filter(function(e) { return e.type === 'seeking'; }).length,
-    rewinds: events.filter(function(e) { return e.type === 'REWIND'; }),
+    byType: {},
+    rewindCount: 0,
+    rewinds: [],
   };
-  console.log('\n=== SUMMARY ===');
+  for (const e of events) {
+    summary.byType[e.type] = (summary.byType[e.type] || 0) + 1;
+  }
+  summary.rewindCount = summary.byType.REWIND || 0;
+  summary.rewinds = events.filter(e => e.type === 'REWIND').slice(0, 5);
+  
+  console.log('\n=== FINAL SUMMARY ===');
   console.log(JSON.stringify(summary, null, 2));
+  fs.writeFileSync('rewind-summary.json', JSON.stringify(summary, null, 2));
   
   await client.close();
-  process.exit(0);
+  process.exit(summary.rewindCount === 0 ? 0 : 1);
 }
 
-main().catch(function(e) { console.error(e); process.exit(1); });
+main().catch(e => { console.error('Test error:', e); process.exit(1); });
