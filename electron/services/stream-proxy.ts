@@ -76,9 +76,6 @@ function handleRemux(targetUrl: string, req: http.IncomingMessage, res: http.Ser
 
   const referer = `${new URL(targetUrl).origin}/`;
 
-  const targetFps = 25;
-  const gop = targetFps * 2;
-
   const args = [
     '-hide_banner',
     '-loglevel', 'warning',
@@ -87,38 +84,22 @@ function handleRemux(targetUrl: string, req: http.IncomingMessage, res: http.Ser
     '-reconnect', '1',
     '-reconnect_streamed', '1',
     '-reconnect_delay_max', '5',
-    '-analyzeduration', '2000000',
-    '-probesize', '2000000',
-    '-fflags', '+discardcorrupt',
+    '-fflags', '+genpts+igndts+discardcorrupt',
     '-i', targetUrl,
     '-map', '0:v:0',
     '-map', '0:a:0?',
-    '-vf', `fps=${targetFps},settb=AVTB,setpts=N/(${targetFps}*TB)`,
-    '-af', 'aresample=async=1:first_pts=0,asetpts=N/SR/TB',
-    '-c:v', 'libx264',
-    '-preset', 'veryfast',
-    '-tune', 'zerolatency',
-    '-profile:v', 'high',
-    '-level', '4.1',
-    '-pix_fmt', 'yuv420p',
-    '-bf', '0',
-    '-g', String(gop),
-    '-keyint_min', String(gop),
-    '-sc_threshold', '0',
-    '-x264-params', 'force-cfr=1',
-    '-c:a', 'aac',
-    '-ar', '48000',
-    '-ac', '2',
-    '-b:a', '128k',
+    '-c', 'copy',
+    '-bsf:a', 'aac_adtstoasc',
+    '-avoid_negative_ts', 'make_zero',
     '-muxpreload', '0',
     '-muxdelay', '0',
     '-f', 'mp4',
-    '-movflags', '+empty_moov+default_base_moof+frag_keyframe+dash',
+    '-movflags', 'frag_keyframe+empty_moov+default_base_moof+omit_tfhd_offset',
     '-frag_duration', '1000000',
     'pipe:1',
   ];
 
-  console.log('[remux] Re-clock starting:', targetUrl.substring(0, 100));
+  console.log('[remux] Starting for:', targetUrl.substring(0, 100));
   const ff = spawn(resolvedFfmpegPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
   activeFfmpegProcs.add(ff);
 

@@ -54,7 +54,8 @@ export class Fmp4Player {
     if (!mimeType) throw new Error('No MP4 codec supported');
 
     this.sourceBuffer = this.mediaSource.addSourceBuffer(mimeType);
-    this.sourceBuffer.mode = 'segments';
+    this.sourceBuffer.mode = 'sequence';
+    console.log('🟢 [fMP4] SourceBuffer mode set to:', this.sourceBuffer.mode);
 
     this.sourceBuffer.addEventListener('updateend', () => this.pump());
     this.sourceBuffer.addEventListener('error', (e) => {
@@ -69,6 +70,19 @@ export class Fmp4Player {
     };
     this.video.addEventListener('canplay', onCanPlay, { once: true });
     this.video.addEventListener('loadeddata', onCanPlay, { once: true });
+
+    let lastT = 0;
+    let rewindCount = 0;
+    const startAt = Date.now();
+    this.video.addEventListener('timeupdate', () => {
+      const t = this.video.currentTime;
+      if (lastT > 0 && t < lastT - 0.05) {
+        rewindCount++;
+        const elapsed = ((Date.now() - startAt) / 1000).toFixed(1);
+        console.error(`🔴 REWIND #${rewindCount} at ${elapsed}s: ${lastT.toFixed(3)} → ${t.toFixed(3)}`);
+      }
+      lastT = t;
+    });
 
     this.abortController = new AbortController();
 
